@@ -1,0 +1,280 @@
+================================================================================
+FARM SUIT — COMPLETE PROJECT SETUP & INSTALLATION GUIDE
+================================================================================
+Application: Farm Suit (Unified Farm Business Management Platform)
+Version:     1.0 (Production Release)
+Stack:       Backend:  Django 5.1 / 6.1 (Pure JSON views, NO DRF)
+             Frontend: React 19 + Vite + Vanilla CSS Design Tokens
+             Database: PostgreSQL 14 / 15 / 16 / 17
+             Reports:  ReportLab Server-Side Vector A4 PDF Engine
+================================================================================
+
+TABLE OF CONTENTS:
+1. System Prerequisites
+2. Project Directory Structure
+3. Database Setup (PostgreSQL)
+4. Backend Setup & Configuration (Django)
+5. Frontend Setup & Configuration (React + Vite)
+6. Running the Application
+7. Mobile Network Access Setup
+8. Running the Backend Verification Test Suite
+9. Default Administrative Credentials
+10. Troubleshooting & Common Fixes
+
+================================================================================
+1. SYSTEM PREREQUISITES
+================================================================================
+Ensure the following tools are installed on your workstation or server:
+
+- Python:     Version 3.10, 3.11, 3.12, 3.13, or 3.14
+              Verify: python --version (or py --version on Windows)
+- Node.js:    Version 18.x, 20.x, or 22.x LTS
+              Verify: node -v
+- npm:        Version 9.x or 10.x
+              Verify: npm -v
+- PostgreSQL: Version 14, 15, 16, or 17
+              Verify: psql --version
+- Git:        Recommended for version control
+              Verify: git --version
+
+================================================================================
+2. PROJECT DIRECTORY STRUCTURE
+================================================================================
+farm-suit/
+├── USER_MANUAL.md               <-- Comprehensive client user manual
+├── SETUP_AND_INSTALLATION.txt   <-- This setup file
+├── backend/                     <-- Django backend application
+│   ├── .env                     <-- Environment variables (DB credentials, secret key)
+│   ├── requirements.txt         <-- Python package dependencies
+│   ├── manage.py                <-- Django CLI management utility
+│   ├── config/                  <-- Project settings and URL routing
+│   ├── accounts/                <-- Session auth, login, logout, me, CSRF
+│   ├── masters/                 <-- Items, Categories, UOM, Vendors, Customers, Plots
+│   ├── trading/                 <-- Indirect Trading (Purchase Bills & Lines)
+│   ├── farming/                 <-- Direct Farming (Cultivation Batches & Harvests)
+│   ├── inventory/               <-- Unified InventoryLots & Stock Movements
+│   ├── sales/                   <-- Sales Bills, FIFO Costing, ReportLab PDF Engine
+│   ├── reports/                 <-- Derived Profit Analytics & Dashboard KPIs
+│   ├── audit/                   <-- Append-only audit logging & change diffs
+│   ├── utils/                   <-- Response envelopes & decorators
+│   └── verify_backend.py        <-- Automated verification test suite
+└── frontend/                    <-- React + Vite frontend application
+    ├── package.json             <-- npm package configuration
+    ├── requirements.txt         <-- Frontend dependency list & commands
+    ├── vite.config.js           <-- Vite dev server & proxy settings (0.0.0.0 host)
+    ├── index.html               <-- HTML5 entry with Google Fonts (Outfit & Inter)
+    └── src/
+        ├── main.jsx             <-- React root mounter
+        ├── App.jsx              <-- Client-side hash router & auth gate
+        ├── theme/               <-- tokens.css (Light/Dark mode) & global.css
+        ├── api/                 <-- Centralized fetch client & API modules
+        ├── hooks/               <-- useAuth, useToast
+        ├── layouts/             <-- AppLayout (responsive) & AuthLayout
+        ├── components/          <-- Common UI, Audit Timeline, Bill Previews
+        ├── pages/               <-- Dashboard, Masters, Trading, Farming, Inventory, Sales, Reports, Audit
+        └── utils/               <-- Formatters (₹, quantities) & PDF downloader
+
+================================================================================
+3. DATABASE SETUP (POSTGRESQL)
+================================================================================
+1. Open your terminal, command prompt, or pgAdmin:
+   psql -U postgres
+
+2. Create the dedicated database for Farm Suit:
+   CREATE DATABASE farm_suit_db;
+
+3. (Optional) Create a dedicated user if not using the default postgres superuser:
+   CREATE USER farm_admin WITH PASSWORD 'secure_password';
+   GRANT ALL PRIVILEGES ON DATABASE farm_suit_db TO farm_admin;
+
+4. Verify database creation:
+   \l
+   Exit psql:
+   \q
+
+================================================================================
+4. BACKEND SETUP & CONFIGURATION (DJANGO)
+================================================================================
+1. Navigate to the backend directory:
+   cd farm-suit/backend
+
+2. Create and configure the environment file:
+   Ensure a file named `.env` exists in `farm-suit/backend/` with the following:
+
+   -----------------------------------------------------------------------------
+   SECRET_KEY=django-insecure-farm-suit-production-key-change-in-prod-2026
+   DEBUG=True
+   ALLOWED_HOSTS=*
+   DATABASE_NAME=farm_suit_db
+   DATABASE_USER=postgres
+   DATABASE_PASSWORD=root
+   DATABASE_HOST=127.0.0.1
+   DATABASE_PORT=5432
+   -----------------------------------------------------------------------------
+   * Adjust DATABASE_USER and DATABASE_PASSWORD to match your PostgreSQL setup.
+
+3. (Recommended) Create and activate a Python virtual environment:
+   Windows:
+     py -m venv venv
+     .\venv\Scripts\activate
+
+   Linux / macOS:
+     python3 -m venv venv
+     source venv/bin/activate
+
+4. Install the required Python dependencies:
+   pip install -r requirements.txt
+
+5. Apply database migrations:
+   python manage.py migrate
+   (On Windows without venv: py manage.py migrate)
+
+6. Create an administrator account (if not already created):
+   python manage.py createsuperuser
+   - Username: admin
+   - Email:    admin@farmsuit.local
+   - Password: admin123 (or your preferred password)
+
+================================================================================
+5. FRONTEND SETUP & CONFIGURATION (REACT + VITE)
+================================================================================
+1. Open a new terminal window and navigate to the frontend directory:
+   cd farm-suit/frontend
+
+2. Install all Node.js / npm dependencies:
+   npm install
+
+3. Verify the Vite configuration:
+   The `vite.config.js` file is pre-configured with:
+   - `host: '0.0.0.0'` (Allows local network and mobile access)
+   - `port: 5173`
+   - Proxy: `/api` -> `http://127.0.0.1:8000` (Seamless backend forwarding)
+
+================================================================================
+6. RUNNING THE APPLICATION
+================================================================================
+You will need TWO terminal windows running simultaneously (or run them as background services):
+
+TERMINAL 1 — BACKEND SERVER:
+--------------------------------------------------------------------------------
+cd farm-suit/backend
+# Activate virtualenv if used
+python manage.py runserver 0.0.0.0:8000
+
+Expected Output:
+Starting WSGI development server at http://0.0.0.0:8000/
+Quit the server with CTRL-BREAK.
+
+TERMINAL 2 — FRONTEND DEV SERVER:
+--------------------------------------------------------------------------------
+cd farm-suit/frontend
+npm run dev
+
+Expected Output:
+  VITE v6.x.x  ready in 300 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://<your-local-ip>:5173/
+
+================================================================================
+7. MOBILE NETWORK ACCESS SETUP
+================================================================================
+To access Farm Suit from a mobile phone or tablet on the same Wi-Fi network:
+
+1. Discover your computer's local IP address:
+   Windows: Run `ipconfig` in Command Prompt (look for IPv4 under Wi-Fi, e.g. 192.168.29.100)
+   Linux:   Run `ip addr` or `hostname -I`
+   macOS:   Run `ipconfig getifaddr en0`
+
+2. Connect your mobile device:
+   Connect your mobile phone to the EXACT SAME Wi-Fi network as the computer.
+
+3. Open the Mobile Browser:
+   Navigate to:
+   http://<YOUR_COMPUTER_IP>:5173/
+   (Example: http://192.168.29.100:5173/)
+
+4. Sign In:
+   Enter username `admin` and password `admin123`.
+
+* Note: The responsive interface will automatically adapt with a mobile slide-out drawer (☰) and touch-friendly controls.
+
+================================================================================
+8. RUNNING THE BACKEND VERIFICATION TEST SUITE
+================================================================================
+Farm Suit comes with an automated end-to-end mathematical verification script
+that tests all 7 core business logic requirements:
+- Purchase Bill creation and lot generation (500 Kg @ ₹80)
+- Farm Harvest recording and unit cost derivation (300 Kg @ ₹55)
+- Multi-lot strict FIFO sales allocation and exact line-level COGS computation
+- Insufficient stock rejection
+- Controlled bill reversal and stock restoration
+- ReportLab vector PDF attachment generation
+- Audit trail event logging and field diff verification
+
+To run the verification suite:
+cd farm-suit/backend
+python verify_backend.py
+(On Windows: py verify_backend.py)
+
+Expected Output:
+[PASS] Test 1: Purchase Bill & Lot Generation
+[PASS] Test 2: Direct Farming Cultivation & Harvest
+[PASS] Test 3: FIFO Sales Billing & COGS Allocation
+[PASS] Test 4: Insufficient Stock Invariant Enforcement
+[PASS] Test 5: Sales Bill Controlled Reversal & Stock Restoration
+[PASS] Test 6: ReportLab Vector PDF Engine
+[PASS] Test 7: Real-Time Derived Profit & Audit Trail
+ALL VERIFICATION TESTS COMPLETED SUCCESSFULLY!
+
+================================================================================
+9. DEFAULT ADMINISTRATIVE CREDENTIALS
+================================================================================
+- Login URL:  http://localhost:5173/ (or http://<LAN-IP>:5173/)
+- Username:   admin
+- Password:   admin123
+
+================================================================================
+10. TROUBLESHOOTING & COMMON FIXES
+================================================================================
+
+ISSUE 1: "FATAL: password authentication failed for user 'postgres'"
+--------------------------------------------------------------------------------
+Fix: Open `farm-suit/backend/.env` and update `DATABASE_PASSWORD` to match the
+password you set when installing PostgreSQL.
+
+ISSUE 2: "Port 5173 is already in use"
+--------------------------------------------------------------------------------
+Fix on Windows:
+  netstat -ano | findstr :5173
+  taskkill /F /PID <process_id>
+Fix on Linux / macOS:
+  lsof -i :5173
+  kill -9 <process_id>
+
+ISSUE 3: "Mobile phone cannot connect / Connection timed out"
+--------------------------------------------------------------------------------
+Checklist:
+1. Ensure both devices are on the SAME Wi-Fi network (not a guest network with AP isolation).
+2. On Windows: Open Settings -> Network & Internet -> Wi-Fi -> Properties -> Ensure Network profile is set to "Private".
+3. Check Windows Defender Firewall: Ensure Node.js and Python are permitted through the firewall.
+
+ISSUE 4: "CSRF verification failed" on mobile device
+--------------------------------------------------------------------------------
+Fix: In `farm-suit/backend/config/settings.py`, the system is configured to
+automatically detect and whitelist local network IP addresses dynamically.
+If using a custom domain or reverse proxy, add your domain to `CSRF_TRUSTED_ORIGINS`
+in `settings.py`.
+
+ISSUE 5: "Building the Frontend for Production"
+--------------------------------------------------------------------------------
+To compile a static production bundle:
+cd farm-suit/frontend
+npm run build
+The output will be placed in `farm-suit/frontend/dist/` ready to be served via
+Nginx, Caddy, or Django static files.
+
+================================================================================
+SUPPORT & DOCUMENTATION:
+For full operational instructions, view USER_MANUAL.md in the project root.
+================================================================================

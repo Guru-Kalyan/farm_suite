@@ -1,0 +1,3 @@
+from .audit_service import record_audit
+
+__all__ = ['record_audit']

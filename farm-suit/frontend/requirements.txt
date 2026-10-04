@@ -1,0 +1,31 @@
+# ==============================================================================
+# FARM SUIT — FRONTEND NPM / NODE REQUIREMENTS
+# ==============================================================================
+# Node.js Version Compatibility: Node.js 18.x, 20.x, 22.x or higher
+# Package Manager: npm (v9+ or v10+), yarn, or pnpm
+# Installation Command: npm install
+# ==============================================================================
+
+# Core React Framework (UI Library)
+react@^19.0.0
+react-dom@^19.0.0
+
+# Build Tool, Bundler & Development Server
+vite@^6.2.0
+
+# Vite Fast-Refresh Plugin for React
+@vitejs/plugin-react@^4.3.4
+
+# ==============================================================================
+# INSTALLATION COMMANDS:
+# ==============================================================================
+# Option 1 (Standard):
+#   npm install
+#
+# Option 2 (Manual package installation):
+#   npm install react@^19.0.0 react-dom@^19.0.0
+#   npm install -D vite@^6.2.0 @vitejs/plugin-react@^4.3.4
+#
+# Option 3 (Clean install / CI):
+#   npm ci
+# ==============================================================================

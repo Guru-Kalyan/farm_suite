@@ -1,0 +1,129 @@
+:root {
+  /* Light Mode Palette */
+  --bg-app: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f1f5f9;
+  --bg-surface-secondary: #f8fafc;
+  --bg-input: #ffffff;
+
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus: #16a34a;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* Primary Brand: Lush Agricultural Green */
+  --primary: #15803d;
+  --primary-hover: #166534;
+  --primary-active: #14532d;
+  --primary-subtle: #ecfdf5;
+  --primary-text: #065f46;
+  --primary-border: #86efac;
+
+  /* Accent Brand: Harvest Amber */
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-subtle: #fffbeb;
+  --accent-text: #92400e;
+
+  /* Semantic Feedback */
+  --success: #16a34a;
+  --success-subtle: #f0fdf4;
+  --success-text: #166534;
+
+  --warning: #f59e0b;
+  --warning-subtle: #fffbeb;
+  --warning-text: #b45309;
+
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-subtle: #fef2f2;
+  --danger-text: #991b1b;
+
+  --info: #0284c7;
+  --info-subtle: #f0f9ff;
+  --info-text: #075985;
+
+  /* Depth & Elevation */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+
+  /* Geometry */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout Constants */
+  --sidebar-width: 260px;
+  --sidebar-width-collapsed: 72px;
+  --header-height: 64px;
+}
+
+[data-theme="dark"] {
+  /* Dark Mode Palette */
+  --bg-app: #0b1120;
+  --bg-surface: #131c31;
+  --bg-surface-hover: #1e293b;
+  --bg-surface-secondary: #17233d;
+  --bg-input: #0f172a;
+
+  --border-subtle: #1e293b;
+  --border-strong: #334155;
+  --border-focus: #22c55e;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+
+  /* Primary Brand: Vibrant Emerald */
+  --primary: #22c55e;
+  --primary-hover: #16a34a;
+  --primary-active: #15803d;
+  --primary-subtle: rgba(34, 197, 94, 0.15);
+  --primary-text: #86efac;
+  --primary-border: #166534;
+
+  /* Accent Brand: Bright Gold */
+  --accent: #fbbf24;
+  --accent-hover: #f59e0b;
+  --accent-subtle: rgba(245, 158, 11, 0.15);
+  --accent-text: #fde68a;
+
+  /* Semantic Feedback */
+  --success: #22c55e;
+  --success-subtle: rgba(34, 197, 94, 0.15);
+  --success-text: #86efac;
+
+  --warning: #fbbf24;
+  --warning-subtle: rgba(251, 191, 36, 0.15);
+  --warning-text: #fde68a;
+
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-subtle: rgba(239, 68, 68, 0.15);
+  --danger-text: #fca5a5;
+
+  --info: #38bdf8;
+  --info-subtle: rgba(56, 189, 248, 0.15);
+  --info-text: #7dd3fc;
+
+  /* Depth & Elevation */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.7);
+}
