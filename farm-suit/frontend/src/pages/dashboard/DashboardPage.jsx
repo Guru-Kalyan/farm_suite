@@ -93,7 +93,7 @@ export const DashboardPage = ({ onNavigate }) => {
           title="Monthly Gross Profit"
           value={formatCurrency(kpis.monthly_profit)}
           subtitle={`Today: ${formatCurrency(kpis.today_profit)}`}
-          icon="💰"
+          icon="₹"
           variant="success"
           onClick={() => onNavigate('/reports/profit')}
         />
@@ -206,7 +206,7 @@ export const DashboardPage = ({ onNavigate }) => {
                 >
                   <div>
                     <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{it.name}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>[{it.item_code}]</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>[{it.item_code}]</span>XM
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: 'var(--danger)', fontWeight: '700', fontSize: '13px' }}>

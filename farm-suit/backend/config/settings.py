@@ -10,7 +10,14 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-farm-suit-default-key-mvp-2026')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+	host.strip()
+	for host in os.getenv(
+		'ALLOWED_HOSTS',
+		'localhost,127.0.0.1'
+	).split(',')
+	if host.strip()
+]
 
 # Automatically detect local network IPs for mobile testing
 import socket
@@ -30,6 +37,14 @@ def get_local_ip_origins():
             origins.append(f'http://{ip}:8000')
     except Exception:
         pass
+    # Automatically include hosts from ALLOWED_HOSTS
+    for host in ALLOWED_HOSTS:
+        if host and host != '*':
+            origins.append(f'http://{host}')
+            origins.append(f'https://{host}')
+            origins.append(f'http://{host}:5173')
+            origins.append(f'http://{host}:8000')
+            origins.append(f'http://{host}:3000')
     # Explicitly include known local IP
     if 'http://192.168.29.100:5173' not in origins:
         origins.append('http://192.168.29.100:5173')
