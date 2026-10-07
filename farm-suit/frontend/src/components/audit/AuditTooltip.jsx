@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { auditApi } from '../../api/audit';
 import { formatDateTime } from '../../utils/formatters';
 
 export const AuditTooltip = ({ model, id, onOpenTimeline }) => {
+  const { user, hasPermission } = useAuth();
   const [hovered, setHovered] = useState(false);
   const [latestInfo, setLatestInfo] = useState(null);
   const [loaded, setLoaded] = useState(false);
+
+  // Strictly enforce user requirement:
+  // "the view change history can only be visible for the admin only"
+  if (!user || (!user.is_admin && !hasPermission('audit_logs.view'))) {
+    return null;
+  }
 
   const handleMouseEnter = async () => {
     setHovered(true);

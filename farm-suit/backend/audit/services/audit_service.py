@@ -1,6 +1,6 @@
 from audit.models import AuditLog
 
-def record_audit(user, model_name, object_id, action, changed_fields=None, old_values=None, new_values=None, description=""):
+def record_audit(user, model_name, object_id, action, changed_fields=None, old_values=None, new_values=None, description="", ip_address=None):
     """
     Records an append-only audit log entry.
     Ensures all JSON values are serializable.
@@ -14,7 +14,8 @@ def record_audit(user, model_name, object_id, action, changed_fields=None, old_v
             changed_fields=changed_fields or [],
             old_values=old_values or {},
             new_values=new_values or {},
-            description=description or ""
+            description=description or "",
+            ip_address=ip_address
         )
         return log
     except Exception as e:

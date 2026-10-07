@@ -8,9 +8,11 @@ import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
 import { formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
 
 export const CultivationListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [batches, setBatches] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -102,9 +104,11 @@ export const CultivationListPage = ({ onNavigate, onOpenAudit }) => {
             Schedule and track in-house agricultural cultivation batches across farm plots
           </p>
         </div>
-        <Button variant="primary" onClick={() => onNavigate('/cultivation/new')}>
-          + New Cultivation Batch
-        </Button>
+        {hasPermission('crops.create') && (
+          <Button variant="primary" onClick={() => onNavigate('/cultivation/new')}>
+            + New Cultivation Batch
+          </Button>
+        )}
       </div>
 
       <div style={{

@@ -8,9 +8,11 @@ import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
 
 export const PurchaseListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [purchases, setPurchases] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -99,9 +101,11 @@ export const PurchaseListPage = ({ onNavigate, onOpenAudit }) => {
             Indirect trading inventory procurements from external suppliers
           </p>
         </div>
-        <Button variant="primary" onClick={() => onNavigate('/purchases/new')}>
-          + New Purchase Bill
-        </Button>
+        {hasPermission('purchases.create') && (
+          <Button variant="primary" onClick={() => onNavigate('/purchases/new')}>
+            + New Purchase Bill
+          </Button>
+        )}
       </div>
 
       <div style={{

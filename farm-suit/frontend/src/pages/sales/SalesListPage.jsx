@@ -9,9 +9,11 @@ import { AuditTooltip } from '../../components/audit/AuditTooltip';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadSalesBillPdf } from '../../utils/pdfDownload';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
 
 export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [sales, setSales] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -114,9 +116,11 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
             Unified billing engine with FIFO lot cost deduction and official PDF generation
           </p>
         </div>
-        <Button variant="primary" onClick={() => onNavigate('/sales/new')}>
-          + Create Sales Bill
-        </Button>
+        {hasPermission('sales.create') && (
+          <Button variant="primary" onClick={() => onNavigate('/sales/new')}>
+            + Create Sales Bill
+          </Button>
+        )}
       </div>
 
       <div style={{

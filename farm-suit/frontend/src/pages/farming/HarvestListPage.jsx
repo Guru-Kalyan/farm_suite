@@ -8,9 +8,11 @@ import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
 
 export const HarvestListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [harvests, setHarvests] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -130,9 +132,11 @@ export const HarvestListPage = ({ onNavigate, onOpenAudit }) => {
             Record crop yields and post farm produce directly into unified inventory lots
           </p>
         </div>
-        <Button variant="primary" onClick={() => onNavigate('/harvests/new')}>
-          + Record Harvest
-        </Button>
+        {hasPermission('crops.create') && (
+          <Button variant="primary" onClick={() => onNavigate('/harvests/new')}>
+            + Record Harvest
+          </Button>
+        )}
       </div>
 
       <div style={{
