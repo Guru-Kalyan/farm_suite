@@ -149,7 +149,7 @@ export const ProfitReportPage = () => {
           title="Gross Profit"
           value={formatCurrency(summary.total_gross_profit)}
           subtitle={`Net Margin: ${summary.margin_percentage || '0.0%'}`}
-          icon="💰"
+          icon="₹"
           variant="success"
         />
       </div>
