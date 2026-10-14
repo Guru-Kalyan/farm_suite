@@ -1,6 +1,13 @@
 import os
+import time
 from pathlib import Path
 from dotenv import load_dotenv
+
+# Enforce Indian Standard Time (IST) at OS and process level
+os.environ['TZ'] = 'Asia/Kolkata'
+if hasattr(time, 'tzset'):
+    time.tzset()
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -49,6 +56,15 @@ def get_local_ip_origins():
     if 'http://192.168.29.100:5173' not in origins:
         origins.append('http://192.168.29.100:5173')
         origins.append('http://192.168.29.100:8000')
+
+    # Allow custom CSRF origins from environment variables (.env)
+    env_csrf = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+    if env_csrf:
+        for origin in env_csrf.split(','):
+            origin = origin.strip()
+            if origin:
+                origins.append(origin)
+
     return list(set(origins))
 
 INSTALLED_APPS = [
@@ -110,6 +126,9 @@ DATABASES = {
         'PASSWORD': os.getenv('DATABASE_PASSWORD', 'root'),
         'HOST': os.getenv('DATABASE_HOST', '127.0.0.1'),
         'PORT': os.getenv('DATABASE_PORT', '5432'),
+        'OPTIONS': {
+            'options': '-c timezone=Asia/Kolkata',
+        },
     }
 }
 
@@ -123,10 +142,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = 'en-in'
+TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
-USE_TZ = True
+USE_TZ = False
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -143,3 +162,38 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False  # Allows frontend client to read the csrftoken cookie
 SESSION_COOKIE_HTTPONLY = True
+
+# Nginx Reverse Proxy Support
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
+# Production Logging Configuration (Captures 500 errors and tracebacks in Gunicorn/PM2 logs)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+

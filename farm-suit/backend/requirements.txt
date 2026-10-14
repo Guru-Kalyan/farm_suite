@@ -8,6 +8,9 @@
 # Core Web Framework
 Django>=5.1.0,<6.2.0
 
+# WSGI Production HTTP Server
+gunicorn>=22.0.0
+
 # Database Connectivity (PostgreSQL Adapter)
 psycopg2-binary>=2.9.9
 

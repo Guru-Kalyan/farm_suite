@@ -2,10 +2,19 @@ from django.http import JsonResponse
 from decimal import Decimal
 import datetime
 
+import zoneinfo
+from django.utils import timezone
+
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+
 def custom_json_serializer(obj):
     if isinstance(obj, Decimal):
         return str(obj)
-    if isinstance(obj, (datetime.date, datetime.datetime)):
+    if isinstance(obj, datetime.datetime):
+        if timezone.is_aware(obj):
+            obj = obj.astimezone(IST_TZ)
+        return obj.isoformat()
+    if isinstance(obj, datetime.date):
         return obj.isoformat()
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 

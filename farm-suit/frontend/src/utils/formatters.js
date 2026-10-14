@@ -27,9 +27,14 @@ export function formatQuantity(value, unit = '') {
 export function formatDate(dateString) {
   if (!dateString) return '—';
   try {
-    const d = new Date(dateString);
+    let str = dateString;
+    if (typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      str = str + 'T00:00:00+05:30';
+    }
+    const d = new Date(str);
     if (isNaN(d.getTime())) return dateString;
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: '2-digit',
       month: 'short',
       year: 'numeric'
@@ -42,9 +47,18 @@ export function formatDate(dateString) {
 export function formatDateTime(dateTimeString) {
   if (!dateTimeString) return '—';
   try {
-    const d = new Date(dateTimeString);
+    let str = dateTimeString;
+    if (typeof str === 'string') {
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
+        str = str.replace(' ', 'T') + '+05:30';
+      } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(str)) {
+        str = str + '+05:30';
+      }
+    }
+    const d = new Date(str);
     if (isNaN(d.getTime())) return dateTimeString;
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: '2-digit',
       month: 'short',
       year: 'numeric',

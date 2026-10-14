@@ -4,6 +4,19 @@ from utils.response import json_success, json_error
 from utils.decorators import admin_required
 from masters.views import paginate_queryset
 from .models import AuditLog
+from django.utils import timezone
+import zoneinfo
+
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+
+
+def format_datetime_ist(dt):
+    if not dt:
+        return ""
+    if timezone.is_aware(dt):
+        dt = dt.astimezone(IST_TZ)
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
+
 
 
 @require_http_methods(["GET"])
@@ -34,7 +47,7 @@ def audit_list_view(request):
     data = [{
         "id": a.id,
         "user": a.user.username if a.user else "System",
-        "timestamp": a.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        "timestamp": format_datetime_ist(a.timestamp),
         "model_name": a.model_name,
         "object_id": a.object_id,
         "action": a.action,
@@ -64,7 +77,7 @@ def entity_audit_timeline_view(request, model, object_id):
     data = [{
         "id": a.id,
         "user": a.user.username if a.user else "System",
-        "timestamp": a.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        "timestamp": format_datetime_ist(a.timestamp),
         "action": a.action,
         "changed_fields": a.changed_fields,
         "old_values": a.old_values,
