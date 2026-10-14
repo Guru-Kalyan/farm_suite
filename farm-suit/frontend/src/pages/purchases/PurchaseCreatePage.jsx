@@ -19,6 +19,9 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [taxAmount, setTaxAmount] = useState('0.00');
   const [discount, setDiscount] = useState('0.00');
+  const [transportCost, setTransportCost] = useState('0.00');
+  const [packagingCost, setPackagingCost] = useState('0.00');
+  const [otherProcurementCosts, setOtherProcurementCosts] = useState('0.00');
   const [remarks, setRemarks] = useState('');
 
   const [lines, setLines] = useState([
@@ -79,7 +82,12 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
   const subtotal = calculateSubtotal();
   const tax = parseFloat(taxAmount) || 0;
   const disc = parseFloat(discount) || 0;
+  const transport = parseFloat(transportCost) || 0;
+  const packaging = parseFloat(packagingCost) || 0;
+  const otherProc = parseFloat(otherProcurementCosts) || 0;
   const grandTotal = Math.max(0, subtotal + tax - disc);
+  const totalLandedCost = Math.max(0, subtotal + transport + packaging + otherProc + tax - disc);
+  const additionalProcurementTotal = transport + packaging + otherProc;
 
   const handleSubmit = async (shouldPost = false) => {
     if (!vendorId) {
@@ -98,6 +106,9 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
       received_date: receivedDate,
       tax_amount: taxAmount,
       discount,
+      transport_cost: transportCost,
+      packaging_cost: packagingCost,
+      other_procurement_costs: otherProcurementCosts,
       remarks,
       lines: lines.map(l => ({
         item_id: l.item_id,
@@ -116,7 +127,7 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
 
       if (shouldPost) {
         await purchasesApi.postPurchase(createdId);
-        addToast(`Purchase Bill ${billNumber} posted! Stock received into inventory.`, 'success');
+        addToast(`Purchase Bill ${billNumber} posted! Stock received into inventory with landed cost valuation.`, 'success');
       } else {
         addToast(`Purchase Bill ${billNumber} draft saved successfully.`, 'success');
       }
@@ -137,7 +148,7 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
         <div>
           <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Create Purchase Bill</h1>
           <p style={{ margin: '2px 0 0 0', color: 'var(--text-secondary)', fontSize: '12.5px' }}>
-            Record supplier procurement and receive stock into unified inventory
+            Record supplier procurement with landed cost tracking (transport, packaging, procurement fees)
           </p>
         </div>
         <Button variant="ghost" onClick={() => onNavigate('/purchases')}>
@@ -201,7 +212,12 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
         boxShadow: 'var(--shadow-sm)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Procured Item Lines</h3>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Procured Item Lines</h3>
+            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Procurement overheads will be allocated proportionally by value across items
+            </p>
+          </div>
           <Button variant="secondary" size="sm" onClick={handleAddLine}>
             + Add Another Item
           </Button>
@@ -211,17 +227,28 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', width: '35%' }}>Item / Crop</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '20%' }}>Quantity</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '20%' }}>Unit Rate (₹)</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', width: '30%' }}>Item / Crop</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '15%' }}>Quantity</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '15%' }}>Purchase Rate (₹)</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '15%' }}>Base Amount (₹)</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '20%' }}>Est. Landed Cost/Unit</th>
                 <th style={{ padding: '10px 12px', width: '5%' }}></th>
               </tr>
             </thead>
             <tbody>
               {lines.map((line, idx) => {
-                const lineAmount = ((parseFloat(line.quantity) || 0) * (parseFloat(line.unit_rate) || 0));
+                const qty = parseFloat(line.quantity) || 0;
+                const rate = parseFloat(line.unit_rate) || 0;
+                const lineAmount = qty * rate;
                 const selectedItem = items.find(it => String(it.id) === String(line.item_id));
+
+                // Proportional landed cost estimation for preview
+                let estLandedUnitCost = rate;
+                if (subtotal > 0 && qty > 0) {
+                  const lineShare = lineAmount / subtotal;
+                  const lineAllocated = lineShare * additionalProcurementTotal;
+                  estLandedUnitCost = (lineAmount + lineAllocated) / qty;
+                }
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -273,6 +300,10 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
                       {formatCurrency(lineAmount)}
                     </td>
 
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '700', color: 'var(--primary)' }}>
+                      {formatCurrency(estLandedUnitCost)} / {selectedItem?.unit?.short_name || 'unit'}
+                    </td>
+
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <button
                         type="button"
@@ -307,6 +338,41 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
           borderTop: '1px solid var(--border-subtle)'
         }}>
           <div>
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>
+                Procurement & Landed Overheads
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                <Input
+                  label="Transport Cost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={transportCost}
+                  onChange={(e) => setTransportCost(e.target.value)}
+                  prefix="₹"
+                />
+                <Input
+                  label="Packaging Cost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={packagingCost}
+                  onChange={(e) => setPackagingCost(e.target.value)}
+                  prefix="₹"
+                />
+                <Input
+                  label="Other Procurement"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={otherProcurementCosts}
+                  onChange={(e) => setOtherProcurementCosts(e.target.value)}
+                  prefix="₹"
+                />
+              </div>
+            </div>
+
             <Input
               label="Remarks / Delivery Notes"
               value={remarks}
@@ -325,7 +391,7 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
             border: '1px solid var(--border-subtle)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-              <span>Subtotal:</span>
+              <span>Base Subtotal:</span>
               <span style={{ fontWeight: '600' }}>{formatCurrency(subtotal)}</span>
             </div>
 
@@ -350,6 +416,11 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
               />
             </div>
 
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+              <span>Vendor Invoice Total:</span>
+              <span style={{ fontWeight: '700' }}>{formatCurrency(grandTotal)}</span>
+            </div>
+
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -360,8 +431,11 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
               paddingTop: '10px',
               marginTop: '4px'
             }}>
-              <span>Grand Total:</span>
-              <span>{formatCurrency(grandTotal)}</span>
+              <span>Total Landed Valuation:</span>
+              <span>{formatCurrency(totalLandedCost)}</span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Includes base price + ₹{transport.toFixed(2)} transport + ₹{packaging.toFixed(2)} packaging + ₹{otherProc.toFixed(2)} other procurement.
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
@@ -388,3 +462,4 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
     </div>
   );
 };
+

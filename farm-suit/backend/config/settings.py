@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     'farming.apps.FarmingConfig',
     'inventory.apps.InventoryConfig',
     'sales.apps.SalesConfig',
+    'orders.apps.OrdersConfig',
     'reports.apps.ReportsConfig',
     'audit.apps.AuditConfig',
 ]

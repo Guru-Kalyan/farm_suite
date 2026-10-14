@@ -2,7 +2,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
-from sales.models import SalesBill, SalesLine
+from sales.models import SalesBill, SalesLine, SalesPayment
 from inventory.models import InventoryLot, StockMovement
 from audit.services.audit_service import record_audit
 from masters.models import Customer, Item
@@ -19,6 +19,9 @@ def save_sales_bill(data, user, bill_id=None):
     bill_date = data.get("bill_date")
     remarks = data.get("remarks", "").strip()
     items_data = data.get("items", [])
+    sale_type = data.get("sale_type", "REGULAR").strip().upper()
+    if sale_type not in ('REGULAR', 'TRADE'):
+        sale_type = 'REGULAR'
 
     if not customer_id:
         raise ValidationError({"customer_id": ["Customer is required"]})
@@ -50,10 +53,13 @@ def save_sales_bill(data, user, bill_id=None):
     try:
         tax_amount = Decimal(str(data.get("tax_amount", "0.00")))
         discount = Decimal(str(data.get("discount", "0.00")))
-        if tax_amount < 0 or discount < 0:
+        transport_cost = Decimal(str(data.get("transport_cost", "0.00")))
+        packaging_cost = Decimal(str(data.get("packaging_cost", "0.00")))
+        other_selling_expenses = Decimal(str(data.get("other_selling_expenses", "0.00")))
+        if tax_amount < 0 or discount < 0 or transport_cost < 0 or packaging_cost < 0 or other_selling_expenses < 0:
             raise ValueError
     except (ValueError, TypeError):
-        raise ValidationError("Tax and discount must be non-negative decimals")
+        raise ValidationError("Taxes, discounts, and expenses must be non-negative decimals")
 
     # Compute preview subtotal
     subtotal = Decimal('0.00')
@@ -75,12 +81,41 @@ def save_sales_bill(data, user, bill_id=None):
     bill.customer = customer
     bill.bill_number = bill_number
     bill.bill_date = bill_date
+    bill.sale_type = sale_type
     bill.tax_amount = tax_amount
     bill.discount = discount
     bill.subtotal = subtotal
     bill.grand_total = grand_total
+    bill.transport_cost = transport_cost
+    bill.packaging_cost = packaging_cost
+    bill.other_selling_expenses = other_selling_expenses
     bill.remarks = remarks
     bill.save()
+
+    # Handle initial payment if specified
+    initial_payment = data.get("amount_received") or data.get("amount_paid")
+    if initial_payment:
+        try:
+            init_amount = Decimal(str(initial_payment))
+            if init_amount > Decimal('0.00'):
+                if init_amount > grand_total:
+                    raise ValidationError("Initial payment cannot exceed the total bill amount")
+                payment_method = data.get("payment_method", "CASH")
+                ref_no = data.get("payment_reference", "")
+                payment_notes = data.get("payment_notes", "Initial payment on creation")
+                SalesPayment.objects.create(
+                    sales_bill=bill,
+                    customer=customer,
+                    payment_date=bill_date,
+                    amount=init_amount,
+                    payment_method=payment_method,
+                    reference_number=ref_no,
+                    notes=payment_notes,
+                    recorded_by=user
+                )
+                bill.update_payment_status()
+        except (ValueError, TypeError):
+            pass
 
     record_audit(
         user=user,
@@ -89,8 +124,10 @@ def save_sales_bill(data, user, bill_id=None):
         action="UPDATE" if bill_id else "CREATE",
         new_values={
             "bill_number": bill.bill_number,
+            "sale_type": bill.sale_type,
             "customer": customer.customer_name,
             "grand_total": str(bill.grand_total),
+            "payment_status": bill.payment_status,
             "status": bill.status
         },
         description=f"{'Updated' if bill_id else 'Created'} Draft Sales Bill {bill.bill_number}"
@@ -251,6 +288,13 @@ def reverse_sales_bill(bill_id, user, reason):
     if not reason or not reason.strip():
         raise ValidationError("A reversal reason is required")
 
+    # Financial integrity check: verify active payments
+    if bill.amount_paid > Decimal('0.00'):
+        raise ValidationError(
+            f"Cannot reverse bill {bill.bill_number}: Active payments totaling ₹{bill.amount_paid} are recorded. "
+            f"Please reverse or resolve recorded payments before reversing the bill."
+        )
+
     lines = bill.lines.select_related('inventory_lot').all()
     for line in lines:
         lot = line.inventory_lot
@@ -283,3 +327,70 @@ def reverse_sales_bill(bill_id, user, reason):
     )
 
     return bill
+
+@transaction.atomic
+def record_sales_payment(bill_id, payment_data, user):
+    """
+    Records an individual payment against a sales bill:
+    1. Validates bill exists and is not CANCELLED or REVERSED
+    2. Validates payment amount > 0 and amount <= remaining_balance
+    3. Creates SalesPayment record
+    4. Updates SalesBill amount_paid and payment_status
+    5. Records AuditLog
+    """
+    try:
+        bill = SalesBill.objects.select_for_update().get(pk=bill_id)
+    except SalesBill.DoesNotExist:
+        raise ValidationError("Sales bill not found")
+
+    if bill.status in ('CANCELLED', 'REVERSED'):
+        raise ValidationError(f"Cannot record payment on a {bill.status.lower()} bill")
+
+    try:
+        amount = Decimal(str(payment_data.get("amount", "0")))
+        if amount <= Decimal('0.00'):
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ValidationError({"amount": ["Payment amount must be greater than zero"]})
+
+    remaining = bill.remaining_balance
+    if amount > remaining:
+        raise ValidationError({"amount": [f"Payment amount (₹{amount}) exceeds remaining balance of ₹{remaining}"]})
+
+    from django.utils import timezone
+    payment_date = payment_data.get("payment_date") or timezone.now().date()
+    payment_method = payment_data.get("payment_method", "CASH")
+    reference_number = payment_data.get("reference_number", "").strip()
+    notes = payment_data.get("notes", "").strip()
+
+    payment = SalesPayment.objects.create(
+        sales_bill=bill,
+        customer=bill.customer,
+        payment_date=payment_date,
+        amount=amount,
+        payment_method=payment_method,
+        reference_number=reference_number,
+        notes=notes,
+        recorded_by=user
+    )
+
+    bill.update_payment_status()
+
+    record_audit(
+        user=user,
+        model_name="SalesPayment",
+        object_id=payment.id,
+        action="CREATE",
+        new_values={
+            "bill_number": bill.bill_number,
+            "customer": bill.customer.customer_name,
+            "amount": str(payment.amount),
+            "payment_method": payment.payment_method,
+            "reference_number": payment.reference_number,
+            "bill_remaining_balance": str(bill.remaining_balance),
+            "bill_payment_status": bill.payment_status
+        },
+        description=f"Recorded payment of ₹{payment.amount} via {payment.payment_method} on Bill {bill.bill_number}. Remaining: ₹{bill.remaining_balance}"
+    )
+
+    return payment, bill

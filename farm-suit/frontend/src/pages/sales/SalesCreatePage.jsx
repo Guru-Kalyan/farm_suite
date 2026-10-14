@@ -16,9 +16,22 @@ export const SalesCreatePage = ({ onNavigate }) => {
   const [customerId, setCustomerId] = useState('');
   const [billNumber, setBillNumber] = useState('');
   const [billDate, setBillDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [saleType, setSaleType] = useState('REGULAR');
   const [taxAmount, setTaxAmount] = useState('0.00');
   const [discount, setDiscount] = useState('0.00');
   const [remarks, setRemarks] = useState('');
+
+  // Trade sale selling expenses
+  const [transportCost, setTransportCost] = useState('0.00');
+  const [packagingCost, setPackagingCost] = useState('0.00');
+  const [otherSellingExpenses, setOtherSellingExpenses] = useState('0.00');
+
+  // Initial payment on creation
+  const [recordInitialPayment, setRecordInitialPayment] = useState(false);
+  const [amountReceived, setAmountReceived] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
 
   const [lines, setLines] = useState([
     { item_id: '', quantity: '10', selling_rate: '80', available_stock: '0', unit: '' }
@@ -124,9 +137,13 @@ export const SalesCreatePage = ({ onNavigate }) => {
       customer_id: customerId,
       bill_number: billNumber.trim(),
       bill_date: billDate,
+      sale_type: saleType,
       tax_amount: taxAmount,
       discount,
       remarks,
+      transport_cost: saleType === 'TRADE' ? transportCost : '0.00',
+      packaging_cost: saleType === 'TRADE' ? packagingCost : '0.00',
+      other_selling_expenses: saleType === 'TRADE' ? otherSellingExpenses : '0.00',
       items: lines.map(l => ({
         item_id: l.item_id,
         quantity: l.quantity,
@@ -134,111 +151,199 @@ export const SalesCreatePage = ({ onNavigate }) => {
       }))
     };
 
+    if (recordInitialPayment && parseFloat(amountReceived) > 0) {
+      payload.amount_received = amountReceived;
+      payload.payment_method = paymentMethod;
+      payload.payment_reference = paymentReference;
+      payload.payment_notes = paymentNotes;
+    }
+
     try {
       setSubmitting(true);
       setErrors({});
 
       const res = await salesApi.createSale(payload);
-      const createdId = res.data.id;
-
-      if (shouldPost) {
-        await salesApi.postSale(createdId, payload.items);
-        addToast(`Sales Bill ${billNumber} posted! FIFO stock consumed.`, 'success');
-      } else {
-        addToast(`Sales Bill ${billNumber} draft created successfully.`, 'success');
+      if (res && res.data && res.data.id) {
+        const billId = res.data.id;
+        if (shouldPost) {
+          const itemsPayload = lines.map(l => ({
+            item_id: l.item_id,
+            quantity: l.quantity,
+            selling_rate: l.selling_rate
+          }));
+          await salesApi.postSale(billId, itemsPayload);
+          addToast(`Sales bill ${billNumber} created and posted! Stock deducted.`, 'success');
+        } else {
+          addToast(`Sales bill draft ${billNumber} saved successfully!`, 'success');
+        }
+        onNavigate(`/sales/${billId}`);
       }
-
-      onNavigate(`/sales/${createdId}`);
     } catch (err) {
-      if (err.errors) setErrors(err.errors);
-      addToast(err.message || 'Failed to create sales bill', 'error');
+      if (err.errors) {
+        setErrors(err.errors);
+      }
+      addToast(err.message || 'Failed to save sales bill', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Create Sales Bill & Invoice</h1>
+          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Create Sales Invoice</h1>
           <p style={{ margin: '2px 0 0 0', color: 'var(--text-secondary)', fontSize: '12.5px' }}>
-            Authoritative FIFO lot deduction, customer billing, and official invoice generation
+            Book a regular farm sale or trade sale with live stock verification and optional initial payment
           </p>
         </div>
         <Button variant="ghost" onClick={() => onNavigate('/sales')}>
-          ← Back to Sales
+          Cancel
         </Button>
       </div>
 
-      {/* Bill Meta */}
       <div style={{
         backgroundColor: 'var(--bg-surface)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-subtle)',
         padding: '24px',
-        boxShadow: 'var(--shadow-sm)',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '16px'
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-subtle)'
       }}>
-        <Select
-          label="Customer"
-          required
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-          options={customers.map(c => ({ value: c.id, label: `${c.customer_name} (${c.customer_code})` }))}
-          error={errors.customer_id}
-        />
+        {/* Header Fields Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>
+              Customer *
+            </label>
+            <select
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                fontSize: '13px'
+              }}
+            >
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.customer_name} ({c.customer_code})
+                </option>
+              ))}
+            </select>
+            {errors.customer_id && (
+              <span style={{ color: 'var(--danger)', fontSize: '11px' }}>{errors.customer_id[0]}</span>
+            )}
+          </div>
 
-        <Input
-          label="Invoice Bill Number"
-          required
-          value={billNumber}
-          onChange={(e) => setBillNumber(e.target.value.toUpperCase())}
-          placeholder="e.g. INV-2026-001"
-          error={errors.bill_number}
-        />
+          <Input
+            label="Invoice Number *"
+            value={billNumber}
+            onChange={(e) => setBillNumber(e.target.value)}
+            error={errors.bill_number ? errors.bill_number[0] : null}
+            required
+          />
 
-        <Input
-          label="Invoice Date"
-          type="date"
-          required
-          value={billDate}
-          onChange={(e) => setBillDate(e.target.value)}
-        />
-      </div>
+          <Input
+            label="Invoice Date *"
+            type="date"
+            value={billDate}
+            onChange={(e) => setBillDate(e.target.value)}
+            required
+          />
 
-      {/* Line Items Table */}
-      <div style={{
-        backgroundColor: 'var(--bg-surface)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-subtle)',
-        padding: '20px',
-        boxShadow: 'var(--shadow-sm)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Order Line Items</h3>
-          <Button variant="secondary" size="sm" onClick={handleAddLine}>
-            + Add Another Item
-          </Button>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>
+              Sale Type *
+            </label>
+            <select
+              value={saleType}
+              onChange={(e) => setSaleType(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              <option value="REGULAR">Regular Farm Sale</option>
+              <option value="TRADE">Trade Sale (External Resale)</option>
+            </select>
+          </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+        {/* Trade Selling Expenses Section (if TRADE selected) */}
+        {saleType === 'TRADE' && (
+          <div style={{
+            backgroundColor: 'var(--bg-surface-secondary)',
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '24px',
+            border: '1px dashed var(--primary)'
+          }}>
+            <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--primary)', fontWeight: '700' }}>
+              📦 Trade Sale Attributable Selling Expenses (Section 6.1)
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+              <Input
+                label="Selling Transport / Delivery (₹)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={transportCost}
+                onChange={(e) => setTransportCost(e.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                label="Selling Packaging Cost (₹)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={packagingCost}
+                onChange={(e) => setPackagingCost(e.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                label="Other Selling Expenses (₹)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={otherSellingExpenses}
+                onChange={(e) => setOtherSellingExpenses(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Line Items Table */}
+        <h3 style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Invoice Line Items</h3>
+        <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', width: '30%' }}>Item</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', width: '15%' }}>Available Stock</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '18%' }}>Quantity</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '18%' }}>Selling Rate (₹)</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '15%' }}>Amount (₹)</th>
-                <th style={{ padding: '10px 12px', width: '4%' }}></th>
+              <tr style={{ borderBottom: '2px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                <th style={{ padding: '8px 12px', minWidth: '220px' }}>Item / Product</th>
+                <th style={{ padding: '8px 12px', width: '140px' }}>Available Stock</th>
+                <th style={{ padding: '8px 12px', width: '150px' }}>Quantity</th>
+                <th style={{ padding: '8px 12px', width: '150px' }}>Selling Rate (₹)</th>
+                <th style={{ padding: '8px 12px', width: '140px', textAlign: 'right' }}>Total (₹)</th>
+                <th style={{ padding: '8px 12px', width: '60px', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
               {lines.map((line, idx) => {
-                const lineAmount = ((parseFloat(line.quantity) || 0) * (parseFloat(line.selling_rate) || 0));
+                const lineAmount = (parseFloat(line.quantity) || 0) * (parseFloat(line.selling_rate) || 0);
                 const isOverStock = (parseFloat(line.quantity) || 0) > (parseFloat(line.available_stock) || 0);
 
                 return (
@@ -323,6 +428,77 @@ export const SalesCreatePage = ({ onNavigate }) => {
           </table>
         </div>
 
+        <Button variant="ghost" size="sm" onClick={handleAddLine}>
+          + Add Line Item
+        </Button>
+
+        {/* Initial Payment Section */}
+        <div style={{
+          marginTop: '24px',
+          padding: '16px',
+          borderRadius: 'var(--radius-md)',
+          backgroundColor: 'var(--bg-surface-secondary)',
+          border: '1px solid var(--border-subtle)'
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700' }}>
+            <input
+              type="checkbox"
+              checked={recordInitialPayment}
+              onChange={(e) => setRecordInitialPayment(e.target.checked)}
+              style={{ width: '16px', height: '16px' }}
+            />
+            <span>Record initial payment received on bill creation (Section 4.1)</span>
+          </label>
+
+          {recordInitialPayment && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '14px',
+              marginTop: '14px'
+            }}>
+              <Input
+                label="Amount Received (₹) *"
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={grandTotal}
+                value={amountReceived}
+                onChange={(e) => setAmountReceived(e.target.value)}
+                placeholder={String(grandTotal)}
+              />
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>
+                  Payment Method
+                </label>
+                <Select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  options={[
+                    { value: 'UPI', label: 'UPI / QR Code' },
+                    { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                    { value: 'CASH', label: 'Cash' },
+                    { value: 'CHEQUE', label: 'Cheque' },
+                    { value: 'OTHER', label: 'Other' },
+                  ]}
+                />
+              </div>
+              <Input
+                label="Reference / Transaction No."
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder="UTR / UPI Ref No."
+              />
+              <Input
+                label="Payment Notes"
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="e.g. Received via GPay"
+              />
+            </div>
+          )}
+        </div>
+
         {/* Totals & Submit */}
         <div style={{
           display: 'grid',
@@ -350,65 +526,72 @@ export const SalesCreatePage = ({ onNavigate }) => {
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-subtle)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
               <span>Subtotal:</span>
               <span style={{ fontWeight: '600' }}>{formatCurrency(subtotal)}</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <Input
-                label="Tax Amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={taxAmount}
-                onChange={(e) => setTaxAmount(e.target.value)}
-                prefix="₹"
-              />
-              <Input
-                label="Discount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                prefix="₹"
-              />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px' }}>Tax Amount (+):</span>
+              <div style={{ width: '120px' }}>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={taxAmount}
+                  onChange={(e) => setTaxAmount(e.target.value)}
+                  prefix="₹"
+                />
+              </div>
             </div>
 
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: '1.2rem',
-              fontWeight: '800',
-              color: 'var(--primary)',
-              borderTop: '2px solid var(--border-subtle)',
-              paddingTop: '10px',
-              marginTop: '4px'
-            }}>
-              <span>Grand Total:</span>
-              <span>{formatCurrency(grandTotal)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px' }}>Discount (-):</span>
+              <div style={{ width: '120px' }}>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  prefix="₹"
+                />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
-              <Button
-                variant="secondary"
-                style={{ flex: 1 }}
-                onClick={() => handleSubmit(false)}
-                loading={submitting}
-              >
-                💾 Save Draft
-              </Button>
-              <Button
-                variant="primary"
-                style={{ flex: 1 }}
-                onClick={() => handleSubmit(true)}
-                loading={submitting}
-              >
-                🧾 Post & Generate Invoice
-              </Button>
+            <div style={{ height: '1px', backgroundColor: 'var(--border-subtle)', margin: '4px 0' }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px' }}>
+              <span style={{ fontWeight: '700' }}>Grand Total:</span>
+              <span style={{ fontWeight: '800', color: 'var(--primary)' }}>{formatCurrency(grandTotal)}</span>
             </div>
+
+            {recordInitialPayment && parseFloat(amountReceived) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--success-text)' }}>
+                <span>Initial Payment:</span>
+                <span style={{ fontWeight: '700' }}>- {formatCurrency(amountReceived)}</span>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+          <Button
+            variant="ghost"
+            onClick={() => handleSubmit(false)}
+            disabled={submitting}
+          >
+            Save as Draft
+          </Button>
+
+          <Button
+            variant="primary"
+            onClick={() => handleSubmit(true)}
+            disabled={submitting}
+          >
+            {submitting ? 'Processing...' : 'Post Bill & Deduct Stock'}
+          </Button>
         </div>
       </div>
     </div>

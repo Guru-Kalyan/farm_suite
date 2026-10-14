@@ -64,16 +64,30 @@ export const AppLayout = ({
         ]
       },
       {
-        label: 'Indirect Trading',
+        label: 'Orders',
         items: [
-          { path: '/purchases', label: 'Purchase Bills', icon: '📥', requiredPerm: 'purchases.view' }
+          { path: '/orders/regular', label: 'Regular Orders', icon: '📦', requiredPerm: 'sales.view' },
+          { path: '/orders/advance', label: 'Advance Orders', icon: '⏳', requiredPerm: 'sales.view' },
+          { path: '/orders/calendar', label: 'Order Calendar / Deliveries', icon: '📅', requiredPerm: 'sales.view' }
         ]
       },
       {
-        label: 'Direct Farming',
+        label: 'Sales',
         items: [
-          { path: '/cultivation', label: 'Cultivation Batches', icon: '🌱', requiredPerm: 'crops.view' },
-          { path: '/harvests', label: 'Harvest Records', icon: '🚜', requiredPerm: 'crops.view' }
+          { path: '/sales/create', label: 'Sales Entry', icon: '📝', requiredPerm: 'sales.view' },
+          { path: '/sales', label: 'Sales History', icon: '🧾', requiredPerm: 'sales.view' },
+          { path: '/sales/payments', label: 'Payments Received', icon: '💳', requiredPerm: 'sales.view' },
+          { path: '/reports/sales', label: 'Sales Reports', icon: '📈', requiredPerm: 'reports.view' }
+        ]
+      },
+      {
+        label: 'Trade',
+        items: [
+          { path: '/purchases', label: 'Trade Purchases', icon: '📥', requiredPerm: 'purchases.view' },
+          { path: '/trade/sales', label: 'Trade Sales', icon: '🛒', requiredPerm: 'sales.view' },
+          { path: '/trade/vendor-payments', label: 'Vendor Payments', icon: '💸', requiredPerm: 'purchases.view' },
+          { path: '/sales/payments', label: 'Customer Collections', icon: '💰', requiredPerm: 'sales.view' },
+          { path: '/trade/profit', label: 'Trade Profit & Margin', icon: '📊', requiredPerm: 'reports.view' }
         ]
       },
       {
@@ -85,16 +99,26 @@ export const AppLayout = ({
         ]
       },
       {
-        label: 'Sales & Billing',
+        label: 'Direct Farming',
         items: [
-          { path: '/sales', label: 'Sales Bills & Invoices', icon: '🧾', requiredPerm: 'sales.view' }
+          { path: '/cultivation', label: 'Cultivation Batches', icon: '🌱', requiredPerm: 'crops.view' },
+          { path: '/harvests', label: 'Harvest Records', icon: '🚜', requiredPerm: 'crops.view' }
+        ]
+      },
+      {
+        label: 'Accounts / Wallet',
+        items: [
+          { path: '/accounts/customers', label: 'Customer Accounts', icon: '👥', requiredPerm: 'customers.view' },
+          { path: '/accounts/vendors', label: 'Vendor Accounts', icon: '🏢', requiredPerm: 'vendors.view' },
+          { path: '/accounts/receivables', label: 'Receivables', icon: '🎯', requiredPerm: 'customers.view' },
+          { path: '/accounts/payables', label: 'Payables', icon: '📉', requiredPerm: 'vendors.view' },
+          { path: '/accounts/statements', label: 'Transaction Statements', icon: '📑', requiredPerm: 'reports.view' }
         ]
       },
       {
         label: 'Reports & Analytics',
         items: [
           { path: '/reports/profit', label: 'Derived Profit Report', icon: '💰', requiredPerm: 'reports.view' },
-          { path: '/reports/sales', label: 'Sales Analysis', icon: '📈', requiredPerm: 'reports.view' },
           { path: '/reports/purchases', label: 'Procurement Report', icon: '📉', requiredPerm: 'reports.view' },
           { path: '/reports/inventory', label: 'Inventory Valuation', icon: '🏷️', requiredPerm: 'reports.view' }
         ]

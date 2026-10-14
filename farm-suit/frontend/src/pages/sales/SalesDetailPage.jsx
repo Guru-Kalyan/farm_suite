@@ -3,9 +3,10 @@ import { salesApi } from '../../api/sales';
 import { Button } from '../../components/common/Button';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
-import { BillActions } from '../../components/billing/BillActions';
-import { BillPreviewModal } from '../../components/billing/BillPreviewModal';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { WhatsAppShareButton } from '../../components/common/WhatsAppShareButton';
+import { RecordPaymentModal } from '../../components/billing/RecordPaymentModal';
+import { downloadSalesBillPdf } from '../../utils/pdfDownload';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
 
@@ -15,8 +16,9 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmReverseOpen, setConfirmReverseOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -68,6 +70,30 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
     }
   };
 
+  const handleDownload = async () => {
+    try {
+      addToast('Downloading PDF invoice...', 'info');
+      await downloadSalesBillPdf(bill.id, bill.bill_number);
+      addToast('PDF downloaded successfully!', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to download PDF', 'error');
+    }
+  };
+
+  const handleRecordPayment = async (payload) => {
+    try {
+      setSubmittingPayment(true);
+      await salesApi.recordPayment(bill.id, payload);
+      addToast(`Payment of ${formatCurrency(payload.amount)} recorded successfully!`, 'success');
+      setPaymentModalOpen(false);
+      fetchDetail();
+    } catch (err) {
+      addToast(err.message || 'Failed to record payment', 'error');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
   if (loading || !bill) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -76,158 +102,252 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
     );
   }
 
+  const isDraft = bill.status === 'DRAFT';
   const isPosted = bill.status === 'POSTED';
-  const marginPct = parseFloat(bill.subtotal || 0) > 0
-    ? ((parseFloat(bill.total_gross_profit || 0) / parseFloat(bill.subtotal)) * 100).toFixed(1)
-    : '0.0';
+  const isTrade = bill.sale_type === 'TRADE';
+  const remaining = parseFloat(bill.remaining_balance || 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{ margin: 0, fontSize: '1.6rem' }}>Invoice: {bill.bill_number}</h1>
             <StatusBadge status={bill.status} />
+            <StatusBadge status={bill.payment_status} />
+            <StatusBadge status={bill.sale_type} />
             <AuditTooltip model="SalesBill" id={bill.id} onOpenTimeline={onOpenAudit} />
           </div>
-          <p style={{ margin: '2px 0 0 0', color: 'var(--text-secondary)', fontSize: '12.5px' }}>
-            Customer: <b>{bill.customer?.customer_name}</b> • Date: {formatDate(bill.bill_date)}
+          <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            Customer: <b>{bill.customer?.customer_name}</b> ({bill.customer?.customer_code}) • Date: {formatDate(bill.bill_date)}
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Button variant="ghost" onClick={() => onNavigate('/sales')}>
-            ← Back to Sales
+            ← Back to List
           </Button>
 
-          <BillActions
-            bill={bill}
-            onPost={handlePost}
-            onReverse={() => setConfirmReverseOpen(true)}
-            onPreview={() => setPreviewOpen(true)}
-            loading={actionLoading}
-          />
+          {/* WhatsApp Share Button */}
+          <WhatsAppShareButton bill={bill} type={isTrade ? 'trade_sale' : 'sales'} variant="button" />
+
+          {/* Download PDF Button */}
+          <Button variant="ghost" onClick={handleDownload} title="Download official PDF invoice">
+            📥 Download PDF
+          </Button>
+
+          {/* Record Payment Button */}
+          {remaining > 0 && bill.status !== 'CANCELLED' && bill.status !== 'REVERSED' && (
+            <Button variant="primary" onClick={() => setPaymentModalOpen(true)}>
+              💳 Record Payment
+            </Button>
+          )}
+
+          {isDraft && (
+            <Button variant="primary" onClick={handlePost} disabled={actionLoading}>
+              ✅ Post & Deduct Stock
+            </Button>
+          )}
+
+          {isPosted && (
+            <Button variant="danger" onClick={() => setConfirmReverseOpen(true)} disabled={actionLoading}>
+              ↩ Reverse Bill
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Financial & Profitability Banner */}
+      {/* Financial Status Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '16px',
-        backgroundColor: 'var(--bg-surface)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-subtle)',
-        padding: '20px',
-        boxShadow: 'var(--shadow-sm)'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '14px'
       }}>
-        <div>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Invoice Grand Total</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>
+        <div style={{
+          backgroundColor: 'var(--bg-surface)',
+          padding: '16px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-sm)'
+        }}>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '600' }}>
+            Total Invoice Amount
+          </div>
+          <div style={{ fontSize: '1.4rem', fontWeight: '800', marginTop: '4px', color: 'var(--text-primary)' }}>
             {formatCurrency(bill.grand_total)}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Subtotal: {formatCurrency(bill.subtotal)}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            Subtotal: {formatCurrency(bill.subtotal)}
+          </div>
         </div>
 
-        {isPosted && (
-          <>
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Historical COGS (Cost)</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--text-primary)', marginTop: '4px' }}>
-                {formatCurrency(bill.total_cogs)}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Exact FIFO lot costs</div>
-            </div>
+        <div style={{
+          backgroundColor: 'var(--bg-surface)',
+          padding: '16px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-sm)'
+        }}>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '600' }}>
+            Amount Received
+          </div>
+          <div style={{ fontSize: '1.4rem', fontWeight: '800', marginTop: '4px', color: 'var(--success-text)' }}>
+            {formatCurrency(bill.amount_paid)}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            {bill.payments?.length || 0} payment transaction(s)
+          </div>
+        </div>
 
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Gross Profit & Margin</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>
-                {formatCurrency(bill.total_gross_profit)}
-              </div>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--success-text)' }}>
-                {marginPct}% Gross Margin
-              </div>
+        <div style={{
+          backgroundColor: 'var(--bg-surface)',
+          padding: '16px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-sm)'
+        }}>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '600' }}>
+            Remaining Balance
+          </div>
+          <div style={{ fontSize: '1.4rem', fontWeight: '800', marginTop: '4px', color: remaining > 0 ? 'var(--danger-text)' : 'var(--success-text)' }}>
+            {formatCurrency(bill.remaining_balance)}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            Status: <b>{bill.payment_status}</b>
+          </div>
+        </div>
+
+        {isTrade && (
+          <div style={{
+            backgroundColor: 'var(--bg-surface)',
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '600' }}>
+              Net Trade Profit
             </div>
-          </>
+            <div style={{ fontSize: '1.4rem', fontWeight: '800', marginTop: '4px', color: parseFloat(bill.net_trade_profit || 0) >= 0 ? '#15803d' : '#b91c1c' }}>
+              {formatCurrency(bill.net_trade_profit)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Margin: <b>{bill.trade_margin_pct}%</b>
+            </div>
+          </div>
         )}
+      </div>
 
-        <div>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Customer & Status</div>
-          <div style={{ fontWeight: '700', fontSize: '13.5px', marginTop: '4px' }}>{bill.customer?.customer_name}</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Created by {bill.created_by || 'Admin'}</div>
-          {bill.remarks && <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>{bill.remarks}</div>}
+      {/* Customer & Bill Information Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '16px'
+      }}>
+        <div style={{
+          backgroundColor: 'var(--bg-surface)',
+          padding: '18px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)'
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            Customer Details
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+            <div><b>Name:</b> {bill.customer?.customer_name}</div>
+            <div><b>Code:</b> {bill.customer?.customer_code}</div>
+            <div><b>Phone:</b> {bill.customer?.phone || 'N/A'}</div>
+            <div><b>GSTIN:</b> {bill.customer?.gst_number || 'N/A'}</div>
+            <div><b>Address:</b> {bill.customer?.address || 'N/A'}</div>
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: 'var(--bg-surface)',
+          padding: '18px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)'
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            Bill & Cost Breakdown
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Base Subtotal:</span>
+              <b>{formatCurrency(bill.subtotal)}</b>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Tax Amount:</span>
+              <span>{formatCurrency(bill.tax_amount)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Discount:</span>
+              <span>{formatCurrency(bill.discount)}</span>
+            </div>
+            {isTrade && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Selling Transport:</span>
+                  <span>{formatCurrency(bill.transport_cost)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Selling Packaging:</span>
+                  <span>{formatCurrency(bill.packaging_cost)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Other Selling Expenses:</span>
+                  <span>{formatCurrency(bill.other_selling_expenses)}</span>
+                </div>
+              </>
+            )}
+            <div style={{ height: '1px', backgroundColor: 'var(--border-subtle)', margin: '4px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+              <span style={{ fontWeight: '700' }}>Grand Total:</span>
+              <span style={{ fontWeight: '800', color: 'var(--primary)' }}>{formatCurrency(bill.grand_total)}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Itemized Lines with FIFO Cost Breakdown */}
+      {/* Line Items Table */}
       <div style={{
         backgroundColor: 'var(--bg-surface)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-subtle)',
-        padding: '20px',
-        boxShadow: 'var(--shadow-sm)'
+        padding: '18px',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-subtle)'
       }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem' }}>
-          Line Items & FIFO Lot Consumption
-        </h3>
-
+        <h3 style={{ margin: '0 0 14px 0', fontSize: '15px' }}>Line Items & FIFO Cost Deduction</h3>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Item</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Consumed Lot & Source</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Quantity</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Selling Rate</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Revenue</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>COGS</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Gross Profit</th>
+              <tr style={{ borderBottom: '2px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                <th style={{ padding: '8px 10px' }}>#</th>
+                <th style={{ padding: '8px 10px' }}>Item</th>
+                <th style={{ padding: '8px 10px' }}>Inventory Lot</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Qty</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Rate</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Revenue</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>COGS</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Gross Profit</th>
               </tr>
             </thead>
             <tbody>
               {(bill.lines || []).map((line, idx) => (
                 <tr key={line.id || idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '10px 12px' }}>
-                    <b>{line.item?.name}</b>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>[{line.item?.item_code}]</span>
+                  <td style={{ padding: '10px' }}>{idx + 1}</td>
+                  <td style={{ padding: '10px', fontWeight: '600' }}>{line.item?.name}</td>
+                  <td style={{ padding: '10px' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{line.lot?.lot_number || '—'}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>
+                      Lot Unit Cost: {formatCurrency(line.lot?.lot_unit_cost || 0)}
+                    </span>
                   </td>
-                  <td style={{ padding: '10px 12px' }}>
-                    {line.lot ? (
-                      <div>
-                        <span
-                          onClick={() => onNavigate(`/inventory/lots/${line.lot.id}`)}
-                          style={{
-                            fontFamily: 'monospace',
-                            fontWeight: '700',
-                            color: 'var(--primary)',
-                            cursor: 'pointer',
-                            textDecoration: 'underline'
-                          }}
-                        >
-                          {line.lot.lot_number}
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                          ({line.lot.source_type} @ {formatCurrency(line.lot.lot_unit_cost)})
-                        </span>
-                      </div>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Pending posting</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600' }}>
-                    {line.quantity} {line.item?.unit}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    {formatCurrency(line.selling_rate)}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700' }}>
-                    {formatCurrency(line.revenue)}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>
-                    {formatCurrency(line.cost_of_goods_sold)}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', color: 'var(--success)' }}>
+                  <td style={{ padding: '10px', textAlign: 'right' }}>{line.quantity} {line.item?.unit}</td>
+                  <td style={{ padding: '10px', textAlign: 'right' }}>{formatCurrency(line.selling_rate)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>{formatCurrency(line.revenue)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', color: 'var(--text-secondary)' }}>{formatCurrency(line.cost_of_goods_sold)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', fontWeight: '700', color: parseFloat(line.gross_profit) >= 0 ? '#15803d' : '#b91c1c' }}>
                     {formatCurrency(line.gross_profit)}
                   </td>
                 </tr>
@@ -237,25 +357,91 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
         </div>
       </div>
 
-      {/* Bill Preview Modal */}
-      <BillPreviewModal
-        isOpen={previewOpen}
-        onClose={() => setPreviewOpen(false)}
+      {/* Multiple Partial Payments History (Section 4.3) */}
+      <div style={{
+        backgroundColor: 'var(--bg-surface)',
+        padding: '18px',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-subtle)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '15px' }}>Recorded Payments History</h3>
+            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Individual payment receipts credited against Invoice {bill.bill_number}
+            </p>
+          </div>
+          {remaining > 0 && bill.status !== 'CANCELLED' && bill.status !== 'REVERSED' && (
+            <Button variant="primary" size="sm" onClick={() => setPaymentModalOpen(true)}>
+              + Record Payment
+            </Button>
+          )}
+        </div>
+
+        {(!bill.payments || bill.payments.length === 0) ? (
+          <div style={{
+            padding: '24px',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            backgroundColor: 'var(--bg-surface-secondary)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '13px'
+          }}>
+            No payments have been recorded against this invoice yet. Outstanding: {formatCurrency(bill.remaining_balance)}
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                  <th style={{ padding: '8px 10px' }}>Payment Date</th>
+                  <th style={{ padding: '8px 10px' }}>Method</th>
+                  <th style={{ padding: '8px 10px' }}>Reference / UTR</th>
+                  <th style={{ padding: '8px 10px' }}>Notes</th>
+                  <th style={{ padding: '8px 10px' }}>Recorded By</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right' }}>Amount Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bill.payments.map((p, idx) => (
+                  <tr key={p.id || idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <td style={{ padding: '10px' }}>{formatDate(p.payment_date)}</td>
+                    <td style={{ padding: '10px', fontWeight: '600' }}>{p.payment_method_display || p.payment_method}</td>
+                    <td style={{ padding: '10px', fontFamily: 'monospace', fontSize: '12px' }}>{p.reference_number || '—'}</td>
+                    <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{p.notes || '—'}</td>
+                    <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{p.recorded_by || 'Admin'}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: '700', color: 'var(--success-text)' }}>
+                      {formatCurrency(p.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Record Payment Modal */}
+      <RecordPaymentModal
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
         bill={bill}
+        type="sales"
+        onSubmit={handleRecordPayment}
+        loading={submittingPayment}
       />
 
       {/* Reversal Confirmation Dialog */}
       <ConfirmDialog
         isOpen={confirmReverseOpen}
-        onClose={() => setConfirmReverseOpen(false)}
-        onConfirm={handleReverse}
-        title={`Reverse Invoice ${bill.bill_number}`}
-        message="Reversing will void this sales invoice and restore the consumed quantities back to their respective inventory lots."
+        title={`Reverse Sales Bill ${bill.bill_number}`}
+        message="Reversing will restore consumed inventory lots back to stock. This cannot be undone if payments exist."
         confirmText="Confirm Reversal"
-        confirmVariant="danger"
+        cancelText="Cancel"
+        variant="danger"
         requireReason={true}
-        reasonPlaceholder="Mandatory reason for reversal (e.g. Order cancelled, billing correction)..."
-        loading={actionLoading}
+        onConfirm={handleReverse}
+        onCancel={() => setConfirmReverseOpen(false)}
       />
     </div>
   );

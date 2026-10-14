@@ -2,7 +2,10 @@ import { apiClient } from './client';
 
 export const salesApi = {
   getSales: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+    );
+    const qs = new URLSearchParams(cleanParams).toString();
     return apiClient(`/api/sales/${qs ? `?${qs}` : ''}`);
   },
   getSale: (id) => apiClient(`/api/sales/${id}/`),
@@ -17,4 +20,18 @@ export const salesApi = {
     body: JSON.stringify({ reason })
   }),
   getPdfBlob: (id) => apiClient(`/api/sales/${id}/pdf/`, { responseType: 'blob' }),
+
+  // Payments Received
+  getPayments: (params = {}) => {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+    );
+    const qs = new URLSearchParams(cleanParams).toString();
+    return apiClient(`/api/sales/payments/${qs ? `?${qs}` : ''}`);
+  },
+  getBillPayments: (billId) => apiClient(`/api/sales/${billId}/payments/`),
+  recordPayment: (billId, data) => apiClient(`/api/sales/${billId}/payments/`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
 };
