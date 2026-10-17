@@ -333,14 +333,14 @@ export const TradeSalesListPage = ({ onNavigate }) => {
                       <td style={{ padding: '12px 16px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                           <WhatsAppShareButton
-                            shareUrl={generateSaleWhatsAppUrl(s)}
-                            label=""
-                            title="Share invoice on WhatsApp"
+                            bill={s}
+                            type="trade_sale"
+                            title="Share invoice on WhatsApp with PDF"
                           />
                           <button
                             type="button"
                             onClick={(e) => handlePdfDownload(e, s)}
-                            title="Download Tax Invoice PDF"
+                            title="Download Invoice PDF"
                             style={{
                               background: 'none',
                               border: '1px solid var(--border-subtle)',

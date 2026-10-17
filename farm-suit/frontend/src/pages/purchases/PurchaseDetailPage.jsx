@@ -125,9 +125,11 @@ export const PurchaseDetailPage = ({ id, onNavigate, onOpenAudit }) => {
           </Button>
 
           <WhatsAppShareButton
-            shareUrl={generatePurchaseWhatsAppUrl(bill)}
+            bill={bill}
+            type="purchase"
+            variant="button"
             label="Share Bill"
-            title="Share Purchase Bill via WhatsApp"
+            title="Share Purchase Bill via WhatsApp with PDF"
           />
 
           {isPosted && balancePayable > 0 && (

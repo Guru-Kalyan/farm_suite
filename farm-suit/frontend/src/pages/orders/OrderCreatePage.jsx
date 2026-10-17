@@ -97,22 +97,28 @@ export const OrderCreatePage = ({ onNavigate, initialType = 'REGULAR' }) => {
       return;
     }
 
+    const formattedLines = lines.map(l => ({
+      item_id: l.item_id,
+      quantity: l.quantity,
+      unit_rate: l.unit_price,
+      unit_price: l.unit_price,
+      notes: l.notes
+    }));
+
     const payload = {
       order_type: orderType,
       customer_id: customerId,
       order_number: orderNumber.trim(),
       order_date: orderDate,
+      delivery_date: requestedDeliveryDate,
       requested_delivery_date: requestedDeliveryDate,
+      delivery_instructions: deliveryNotes,
       delivery_notes: deliveryNotes,
       initial_advance_amount: orderType === 'ADVANCE' ? initialAdvance : '0.00',
       initial_advance_method: advanceMethod,
       initial_advance_reference: advanceRef,
-      lines: lines.map(l => ({
-        item_id: l.item_id,
-        quantity: l.quantity,
-        unit_price: l.unit_price,
-        notes: l.notes
-      }))
+      items: formattedLines,
+      lines: formattedLines
     };
 
     try {
@@ -173,7 +179,10 @@ export const OrderCreatePage = ({ onNavigate, initialType = 'REGULAR' }) => {
           required
           value={customerId}
           onChange={(e) => setCustomerId(e.target.value)}
-          options={customers.map(c => ({ value: c.id, label: `${c.name} (${c.code || ''})` }))}
+          options={customers.map(c => ({
+            value: c.id,
+            label: `${c.customer_name || c.name || ''}${c.customer_code || c.code ? ` (${c.customer_code || c.code})` : ''}`
+          }))}
           error={errors.customer_id}
         />
 

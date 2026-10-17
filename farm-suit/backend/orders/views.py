@@ -110,6 +110,8 @@ def orders_view(request):
                 "id": o.customer.id,
                 "customer_name": o.customer.customer_name,
                 "customer_code": o.customer.customer_code,
+                "name": o.customer.customer_name,
+                "code": o.customer.customer_code,
                 "phone": o.customer.phone
             },
             "order_date": o.order_date,
@@ -204,6 +206,8 @@ def order_detail_view(request, pk):
             "id": order.customer.id,
             "customer_name": order.customer.customer_name,
             "customer_code": order.customer.customer_code,
+            "name": order.customer.customer_name,
+            "code": order.customer.customer_code,
             "phone": order.customer.phone,
             "address": order.customer.address,
             "gst_number": order.customer.gst_number

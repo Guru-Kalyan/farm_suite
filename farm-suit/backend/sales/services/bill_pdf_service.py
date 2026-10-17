@@ -149,7 +149,7 @@ def generate_sales_bill_pdf(sales_bill):
     header_data = [
         [
             Paragraph("FARM SUIT", brand_style),
-            Paragraph("TAX INVOICE", invoice_title_style)
+            Paragraph("SALES INVOICE", invoice_title_style)
         ],
         [
             Paragraph("Farm Business Management Platform<br/>Agricultural Trading & Direct Production", tagline_style),
@@ -248,7 +248,6 @@ def generate_sales_bill_pdf(sales_bill):
     remarks_text = f"<b>Remarks / Terms:</b><br/>{sales_bill.remarks or 'Thank you for your business!'}"
     totals_data = [
         [Paragraph(remarks_text, val_style), Paragraph("Subtotal:", table_cell_right_bold), Paragraph(f"₹{sales_bill.subtotal}", table_cell_right)],
-        ["", Paragraph("Tax / GST:", table_cell_right_bold), Paragraph(f"₹{sales_bill.tax_amount}", table_cell_right)],
         ["", Paragraph("Discount:", table_cell_right_bold), Paragraph(f"- ₹{sales_bill.discount}", table_cell_right)],
         ["", Paragraph("Grand Total:", ParagraphStyle('GT', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=2, textColor=colors.HexColor('#15803d'))),
          Paragraph(f"₹{sales_bill.grand_total}", ParagraphStyle('GTVal', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=2, textColor=colors.HexColor('#15803d')))],
@@ -259,9 +258,9 @@ def generate_sales_bill_pdf(sales_bill):
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LINEABOVE', (1, 3), (2, 3), 1, colors.HexColor('#15803d')),
-        ('LINEBELOW', (1, 3), (2, 3), 1.5, colors.HexColor('#15803d')),
-        ('BACKGROUND', (1, 3), (2, 3), colors.HexColor('#ecfdf5')),
+        ('LINEABOVE', (1, 2), (2, 2), 1, colors.HexColor('#15803d')),
+        ('LINEBELOW', (1, 2), (2, 2), 1.5, colors.HexColor('#15803d')),
+        ('BACKGROUND', (1, 2), (2, 2), colors.HexColor('#ecfdf5')),
     ]))
     story.append(KeepTogether(totals_table))
     story.append(Spacer(1, 30))

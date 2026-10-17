@@ -36,8 +36,14 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
       const params = { order_type: 'ADVANCE' };
       if (customerId) params.customer_id = customerId;
       if (status) params.status = status;
-      if (fromDate) params.delivery_date_after = fromDate;
-      if (toDate) params.delivery_date_before = toDate;
+      if (fromDate) {
+        params.from_date = fromDate;
+        params.delivery_date_after = fromDate;
+      }
+      if (toDate) {
+        params.to_date = toDate;
+        params.delivery_date_before = toDate;
+      }
       if (search) params.search = search;
 
       const res = await ordersApi.getOrders(params);
@@ -176,7 +182,10 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
             onChange={(e) => setCustomerId(e.target.value)}
             options={[
               { value: '', label: 'All Customers' },
-              ...customers.map(c => ({ value: c.id, label: `${c.name} (${c.code || ''})` }))
+              ...customers.map(c => ({
+                value: c.id,
+                label: `${c.customer_name || c.name || ''}${c.customer_code || c.code ? ` (${c.customer_code || c.code})` : ''}`
+              }))
             ]}
           />
         </div>
@@ -278,17 +287,17 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
                         </span>
                       </td>
                       <td style={{ padding: '12px 16px' }}>
-                        <b>{o.customer?.name}</b>
+                        <b>{o.customer?.customer_name || o.customer?.name}</b>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{o.customer?.phone}</div>
                       </td>
                       <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', fontWeight: '600' }}>
-                        {formatDate(o.requested_delivery_date)}
+                        {formatDate(o.delivery_date || o.requested_delivery_date)}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700' }}>
-                        {formatCurrency(o.estimated_total)}
+                        {formatCurrency(o.total_amount ?? o.estimated_total)}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--success)', fontWeight: '700' }}>
-                        {formatCurrency(o.advance_amount_received)}
+                        {formatCurrency(o.advance_amount ?? o.advance_amount_received)}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: rem > 0 ? 'var(--warning)' : 'var(--text-secondary)' }}>
                         {formatCurrency(rem)}
@@ -297,9 +306,9 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
                         <StatusBadge status={o.status} />
                       </td>
                       <td style={{ padding: '12px 16px' }} onClick={(e) => e.stopPropagation()}>
-                        {o.linked_sale_bill ? (
+                        {(o.fulfilled_sales_bill || o.linked_sale_bill) ? (
                           <span
-                            onClick={() => onNavigate(`/sales/${o.linked_sale_bill.id}`)}
+                            onClick={() => onNavigate(`/sales/${(o.fulfilled_sales_bill || o.linked_sale_bill).id}`)}
                             style={{
                               fontFamily: 'monospace',
                               fontWeight: '700',
@@ -308,7 +317,7 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
                               textDecoration: 'underline'
                             }}
                           >
-                            {o.linked_sale_bill.bill_number}
+                            {(o.fulfilled_sales_bill || o.linked_sale_bill).bill_number}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Not fulfilled</span>

@@ -62,7 +62,7 @@ export const BillPreviewModal = ({ isOpen, onClose, bill }) => {
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <h2 style={{ fontSize: '1.2rem', margin: '0 0 4px 0', color: '#0f172a' }}>TAX INVOICE</h2>
+            <h2 style={{ fontSize: '1.2rem', margin: '0 0 4px 0', color: '#0f172a' }}>INVOICE</h2>
             <div style={{ fontWeight: '700', fontSize: '14px' }}>{bill.bill_number}</div>
             <div style={{ color: '#64748b', fontSize: '12px' }}>Date: {formatDate(bill.bill_date)}</div>
             <div style={{ marginTop: '4px' }}><StatusBadge status={bill.status} /></div>
@@ -134,12 +134,7 @@ export const BillPreviewModal = ({ isOpen, onClose, bill }) => {
                 <span>- {formatCurrency(bill.discount)}</span>
               </div>
             )}
-            {parseFloat(bill.tax_amount || 0) > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
-                <span>Tax:</span>
-                <span>{formatCurrency(bill.tax_amount)}</span>
-              </div>
-            )}
+
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',

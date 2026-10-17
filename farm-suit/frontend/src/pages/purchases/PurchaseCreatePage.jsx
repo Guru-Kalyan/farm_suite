@@ -17,7 +17,6 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
   const [billNumber, setBillNumber] = useState('');
   const [billDate, setBillDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [taxAmount, setTaxAmount] = useState('0.00');
   const [discount, setDiscount] = useState('0.00');
   const [transportCost, setTransportCost] = useState('0.00');
   const [packagingCost, setPackagingCost] = useState('0.00');
@@ -80,13 +79,12 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
   };
 
   const subtotal = calculateSubtotal();
-  const tax = parseFloat(taxAmount) || 0;
   const disc = parseFloat(discount) || 0;
   const transport = parseFloat(transportCost) || 0;
   const packaging = parseFloat(packagingCost) || 0;
   const otherProc = parseFloat(otherProcurementCosts) || 0;
-  const grandTotal = Math.max(0, subtotal + tax - disc);
-  const totalLandedCost = Math.max(0, subtotal + transport + packaging + otherProc + tax - disc);
+  const grandTotal = Math.max(0, subtotal - disc);
+  const totalLandedCost = Math.max(0, subtotal + transport + packaging + otherProc - disc);
   const additionalProcurementTotal = transport + packaging + otherProc;
 
   const handleSubmit = async (shouldPost = false) => {
@@ -104,7 +102,6 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
       bill_number: billNumber.trim(),
       bill_date: billDate,
       received_date: receivedDate,
-      tax_amount: taxAmount,
       discount,
       transport_cost: transportCost,
       packaging_cost: packagingCost,
@@ -395,26 +392,15 @@ export const PurchaseCreatePage = ({ onNavigate }) => {
               <span style={{ fontWeight: '600' }}>{formatCurrency(subtotal)}</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <Input
-                label="Tax Amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={taxAmount}
-                onChange={(e) => setTaxAmount(e.target.value)}
-                prefix="₹"
-              />
-              <Input
-                label="Discount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                prefix="₹"
-              />
-            </div>
+            <Input
+              label="Discount"
+              type="number"
+              step="0.01"
+              min="0"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              prefix="₹"
+            />
 
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
               <span>Vendor Invoice Total:</span>

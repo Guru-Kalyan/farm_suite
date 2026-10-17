@@ -17,7 +17,6 @@ export const SalesCreatePage = ({ onNavigate }) => {
   const [billNumber, setBillNumber] = useState('');
   const [billDate, setBillDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [saleType, setSaleType] = useState('REGULAR');
-  const [taxAmount, setTaxAmount] = useState('0.00');
   const [discount, setDiscount] = useState('0.00');
   const [remarks, setRemarks] = useState('');
 
@@ -109,9 +108,8 @@ export const SalesCreatePage = ({ onNavigate }) => {
     return acc + (q * r);
   }, 0);
 
-  const tax = parseFloat(taxAmount) || 0;
   const disc = parseFloat(discount) || 0;
-  const grandTotal = Math.max(0, subtotal + tax - disc);
+  const grandTotal = Math.max(0, subtotal - disc);
 
   const handleSubmit = async (shouldPost = false) => {
     if (!customerId) {
@@ -138,7 +136,6 @@ export const SalesCreatePage = ({ onNavigate }) => {
       bill_number: billNumber.trim(),
       bill_date: billDate,
       sale_type: saleType,
-      tax_amount: taxAmount,
       discount,
       remarks,
       transport_cost: saleType === 'TRADE' ? transportCost : '0.00',
@@ -529,20 +526,6 @@ export const SalesCreatePage = ({ onNavigate }) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
               <span>Subtotal:</span>
               <span style={{ fontWeight: '600' }}>{formatCurrency(subtotal)}</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px' }}>Tax Amount (+):</span>
-              <div style={{ width: '120px' }}>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={taxAmount}
-                  onChange={(e) => setTaxAmount(e.target.value)}
-                  prefix="₹"
-                />
-              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

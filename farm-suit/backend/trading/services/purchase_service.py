@@ -51,23 +51,23 @@ def save_purchase_bill(data, user, bill_id=None):
         raise ValidationError({"lines": ["At least one purchase line item is required"]})
 
     try:
-        tax_amount = Decimal(str(data.get("tax_amount", "0.00")))
         discount = Decimal(str(data.get("discount", "0.00")))
         transport_cost = Decimal(str(data.get("transport_cost", "0.00")))
         packaging_cost = Decimal(str(data.get("packaging_cost", "0.00")))
         other_procurement_costs = Decimal(str(data.get("other_procurement_costs", "0.00")))
-        if (tax_amount < 0 or discount < 0 or transport_cost < 0 or
+        if (discount < 0 or transport_cost < 0 or
             packaging_cost < 0 or other_procurement_costs < 0):
             raise ValueError
     except (ValueError, TypeError):
-        raise ValidationError("Taxes, discounts, and procurement costs must be non-negative decimals")
+        raise ValidationError("Discounts and procurement costs must be non-negative decimals")
+    tax_amount = Decimal('0.00')
 
     bill.vendor = vendor
     bill.bill_number = bill_number
     bill.bill_date = bill_date
     bill.received_date = received_date
     bill.accepted_by = user
-    bill.tax_amount = tax_amount
+    bill.tax_amount = Decimal('0.00')
     bill.discount = discount
     bill.transport_cost = transport_cost
     bill.packaging_cost = packaging_cost
@@ -110,7 +110,7 @@ def save_purchase_bill(data, user, bill_id=None):
             "remarks": line.get("remarks", "")
         })
 
-    grand_total = (subtotal + tax_amount - discount).quantize(Decimal('0.01'))
+    grand_total = (subtotal - discount).quantize(Decimal('0.01'))
     if grand_total < Decimal('0.00'):
         grand_total = Decimal('0.00')
 

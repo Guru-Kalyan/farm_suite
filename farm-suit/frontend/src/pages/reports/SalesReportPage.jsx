@@ -56,7 +56,6 @@ export const SalesReportPage = ({ onNavigate }) => {
     { key: 'customer', header: 'Customer', render: (val) => <b>{val}</b> },
     { key: 'bill_date', header: 'Date', render: (val) => formatDate(val) },
     { key: 'subtotal', header: 'Subtotal', render: (val) => formatCurrency(val) },
-    { key: 'tax', header: 'Tax', render: (val) => formatCurrency(val) },
     { key: 'discount', header: 'Discount', render: (val) => formatCurrency(val) },
     { key: 'grand_total', header: 'Grand Total', render: (val) => <span style={{ fontWeight: '800' }}>{formatCurrency(val)}</span> }
   ];

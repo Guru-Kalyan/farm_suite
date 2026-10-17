@@ -51,15 +51,15 @@ def save_sales_bill(data, user, bill_id=None):
         raise ValidationError({"items": ["At least one item is required in the sales bill"]})
 
     try:
-        tax_amount = Decimal(str(data.get("tax_amount", "0.00")))
         discount = Decimal(str(data.get("discount", "0.00")))
         transport_cost = Decimal(str(data.get("transport_cost", "0.00")))
         packaging_cost = Decimal(str(data.get("packaging_cost", "0.00")))
         other_selling_expenses = Decimal(str(data.get("other_selling_expenses", "0.00")))
-        if tax_amount < 0 or discount < 0 or transport_cost < 0 or packaging_cost < 0 or other_selling_expenses < 0:
+        if discount < 0 or transport_cost < 0 or packaging_cost < 0 or other_selling_expenses < 0:
             raise ValueError
     except (ValueError, TypeError):
-        raise ValidationError("Taxes, discounts, and expenses must be non-negative decimals")
+        raise ValidationError("Discounts and expenses must be non-negative decimals")
+    tax_amount = Decimal('0.00')
 
     # Compute preview subtotal
     subtotal = Decimal('0.00')
@@ -74,7 +74,7 @@ def save_sales_bill(data, user, bill_id=None):
             raise ValidationError({f"items[{idx}]": ["Quantity must be > 0 and selling rate must be >= 0"]})
         subtotal += (qty * rate).quantize(Decimal('0.01'))
 
-    grand_total = (subtotal + tax_amount - discount).quantize(Decimal('0.01'))
+    grand_total = (subtotal - discount).quantize(Decimal('0.01'))
     if grand_total < Decimal('0.00'):
         grand_total = Decimal('0.00')
 
@@ -82,7 +82,7 @@ def save_sales_bill(data, user, bill_id=None):
     bill.bill_number = bill_number
     bill.bill_date = bill_date
     bill.sale_type = sale_type
-    bill.tax_amount = tax_amount
+    bill.tax_amount = Decimal('0.00')
     bill.discount = discount
     bill.subtotal = subtotal
     bill.grand_total = grand_total
@@ -239,7 +239,8 @@ def post_sales_bill(bill_id, items_data, user):
 
             qty_remaining -= qty_from_lot
 
-    grand_total = (subtotal + bill.tax_amount - bill.discount).quantize(Decimal('0.01'))
+    bill.tax_amount = Decimal('0.00')
+    grand_total = (subtotal - bill.discount).quantize(Decimal('0.01'))
     if grand_total < Decimal('0.00'):
         grand_total = Decimal('0.00')
 

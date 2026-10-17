@@ -247,7 +247,6 @@ def generate_purchase_bill_pdf(purchase_bill):
     # 4. Financial Totals & Landed Cost Breakdown
     totals_data = [
         [Paragraph("Base Subtotal:", table_cell_style), Paragraph(f"₹{purchase_bill.subtotal:.2f}", table_cell_right)],
-        [Paragraph("Tax Amount (+):", table_cell_style), Paragraph(f"₹{purchase_bill.tax_amount:.2f}", table_cell_right)],
         [Paragraph("Discount (-):", table_cell_style), Paragraph(f"₹{purchase_bill.discount:.2f}", table_cell_right)],
         [Paragraph("<b>Vendor Payable Total:</b>", table_cell_style), Paragraph(f"<b>₹{purchase_bill.grand_total:.2f}</b>", table_cell_right_bold)],
         [Paragraph("Transport Cost:", table_cell_style), Paragraph(f"₹{purchase_bill.transport_cost:.2f}", table_cell_right)],
@@ -265,8 +264,8 @@ def generate_purchase_bill_pdf(purchase_bill):
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
         ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ('LINEBELOW', (0, 3), (-1, 3), 1, colors.HexColor('#cbd5e1')),
-        ('LINEBELOW', (0, 7), (-1, 7), 1, colors.HexColor('#0369a1')),
+        ('LINEBELOW', (0, 2), (-1, 2), 1, colors.HexColor('#cbd5e1')),
+        ('LINEBELOW', (0, 6), (-1, 6), 1, colors.HexColor('#0369a1')),
     ]))
 
     remarks_text = f"<b>Notes:</b><br/>{purchase_bill.remarks or 'Procurement verified against vendor invoice.'}"

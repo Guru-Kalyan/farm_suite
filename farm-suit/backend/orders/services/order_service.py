@@ -27,11 +27,11 @@ def create_order(data, user):
     customer_id = data.get("customer_id")
     order_type = data.get("order_type", "REGULAR").strip().upper()
     order_date = data.get("order_date") or timezone.now().date()
-    delivery_date = data.get("delivery_date")
+    delivery_date = data.get("delivery_date") or data.get("requested_delivery_date")
     delivery_address = data.get("delivery_address", "").strip()
-    delivery_instructions = data.get("delivery_instructions", "").strip()
+    delivery_instructions = (data.get("delivery_instructions") or data.get("delivery_notes", "")).strip()
     notes = data.get("notes", "").strip()
-    items_data = data.get("items", [])
+    items_data = data.get("items") or data.get("lines") or []
 
     if order_type not in ('REGULAR', 'ADVANCE'):
         order_type = 'REGULAR'
@@ -59,12 +59,12 @@ def create_order(data, user):
         order_number = f"{prefix}-{year}-{count:04d}"
 
     try:
-        tax_amount = Decimal(str(data.get("tax_amount", "0.00")))
         discount = Decimal(str(data.get("discount", "0.00")))
-        if tax_amount < 0 or discount < 0:
+        if discount < 0:
             raise ValueError
     except (ValueError, TypeError):
-        raise ValidationError("Tax and discount must be non-negative decimals")
+        raise ValidationError("Discount must be a non-negative decimal")
+    tax_amount = Decimal('0.00')
 
     # Validate lines and subtotal
     subtotal = Decimal('0.00')
@@ -80,7 +80,8 @@ def create_order(data, user):
 
         try:
             qty = Decimal(str(it.get("quantity", "0")))
-            rate = Decimal(str(it.get("unit_rate", "0")))
+            rate_raw = it.get("unit_rate") if it.get("unit_rate") is not None else it.get("unit_price", "0")
+            rate = Decimal(str(rate_raw))
             if qty <= 0 or rate < 0:
                 raise ValueError
         except (ValueError, TypeError):
@@ -96,7 +97,7 @@ def create_order(data, user):
             "notes": it.get("notes", "")
         })
 
-    total_amount = (subtotal + tax_amount - discount).quantize(Decimal('0.01'))
+    total_amount = (subtotal - discount).quantize(Decimal('0.01'))
     if total_amount < Decimal('0.00'):
         total_amount = Decimal('0.00')
 
@@ -302,7 +303,7 @@ def fulfill_order_to_sale(order_id, user, post_immediately=True):
         bill_date=timezone.now().date(),
         sale_type='REGULAR',
         subtotal=order.subtotal,
-        tax_amount=order.tax_amount,
+        tax_amount=Decimal('0.00'),
         discount=order.discount,
         grand_total=order.total_amount,
         remarks=f"Fulfilled from Order {order.order_number}. {order.notes}".strip(),

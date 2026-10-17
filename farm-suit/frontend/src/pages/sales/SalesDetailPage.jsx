@@ -278,10 +278,6 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
               <b>{formatCurrency(bill.subtotal)}</b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Tax Amount:</span>
-              <span>{formatCurrency(bill.tax_amount)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Discount:</span>
               <span>{formatCurrency(bill.discount)}</span>
             </div>
