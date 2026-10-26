@@ -37,9 +37,20 @@ export const SalesCreatePage = ({ onNavigate }) => {
   ]);
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
+  const generateBillNumber = () => {
     const rand = Math.floor(1000 + Math.random() * 9000);
-    setBillNumber(`INV-${new Date().getFullYear()}-${rand}`);
+    const num = `INV-${new Date().getFullYear()}-${rand}`;
+    setBillNumber(num);
+    setErrors(prev => {
+      const copy = { ...prev };
+      delete copy.bill_number;
+      return copy;
+    });
+    return num;
+  };
+
+  useEffect(() => {
+    generateBillNumber();
 
     mastersApi.getCustomers().then(res => {
       if (res && res.data && res.data.customers) {
@@ -136,11 +147,12 @@ export const SalesCreatePage = ({ onNavigate }) => {
       bill_number: billNumber.trim(),
       bill_date: billDate,
       sale_type: saleType,
-      discount,
+      discount: discount || '0.00',
       remarks,
-      transport_cost: saleType === 'TRADE' ? transportCost : '0.00',
-      packaging_cost: saleType === 'TRADE' ? packagingCost : '0.00',
-      other_selling_expenses: saleType === 'TRADE' ? otherSellingExpenses : '0.00',
+      transport_cost: saleType === 'TRADE' ? (transportCost || '0.00') : '0.00',
+      packaging_cost: saleType === 'TRADE' ? (packagingCost || '0.00') : '0.00',
+      other_selling_expenses: saleType === 'TRADE' ? (otherSellingExpenses || '0.00') : '0.00',
+      post: shouldPost,
       items: lines.map(l => ({
         item_id: l.item_id,
         quantity: l.quantity,
@@ -162,7 +174,9 @@ export const SalesCreatePage = ({ onNavigate }) => {
       const res = await salesApi.createSale(payload);
       if (res && res.data && res.data.id) {
         const billId = res.data.id;
-        if (shouldPost) {
+        if (res.data.status === 'POSTED') {
+          addToast(`Sales bill ${billNumber} created and posted! Stock deducted.`, 'success');
+        } else if (shouldPost) {
           const itemsPayload = lines.map(l => ({
             item_id: l.item_id,
             quantity: l.quantity,
@@ -245,6 +259,24 @@ export const SalesCreatePage = ({ onNavigate }) => {
             value={billNumber}
             onChange={(e) => setBillNumber(e.target.value)}
             error={errors.bill_number ? errors.bill_number[0] : null}
+            suffix={
+              <button
+                type="button"
+                onClick={generateBillNumber}
+                title="Generate new invoice number"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary)',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  padding: '2px 4px'
+                }}
+              >
+                🔄 Refresh
+              </button>
+            }
             required
           />
 

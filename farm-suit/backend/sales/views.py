@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
 from django.db.models import Q, Sum, Count
+from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 from utils.response import json_success, json_error
@@ -147,8 +148,27 @@ def sales_view(request):
         if not data:
             return json_error("Invalid JSON body", status=400)
 
+        should_post = bool(data.get("post") or data.get("should_post") or data.get("status") == "POSTED")
+
         try:
-            bill = save_sales_bill(data, request.user)
+            with transaction.atomic():
+                bill = save_sales_bill(data, request.user)
+                if should_post:
+                    items_data = data.get("items", [])
+                    bill = post_sales_bill(bill.id, items_data, request.user)
+
+            if should_post:
+                return json_success({
+                    "id": bill.id,
+                    "bill_number": bill.bill_number,
+                    "sale_type": bill.sale_type,
+                    "grand_total": str(bill.grand_total),
+                    "amount_paid": str(bill.amount_paid),
+                    "remaining_balance": str(bill.remaining_balance),
+                    "payment_status": bill.payment_status,
+                    "status": bill.status
+                }, message=f"Sales bill {bill.bill_number} created and posted successfully. Stock consumed via FIFO.", status=201)
+
             return json_success({
                 "id": bill.id,
                 "bill_number": bill.bill_number,
@@ -160,11 +180,14 @@ def sales_view(request):
                 "status": bill.status
             }, message="Sales bill draft created successfully", status=201)
         except ValidationError as e:
+            msg = str(e.messages[0]) if hasattr(e, 'messages') and e.messages else "Validation failed"
             return json_error(
-                message="Validation failed",
-                errors=e.message_dict if hasattr(e, 'message_dict') else {"detail": e.messages},
+                message=msg,
+                errors=e.message_dict if hasattr(e, 'message_dict') else {"detail": e.messages if hasattr(e, 'messages') else [str(e)]},
                 status=400
             )
+        except Exception as e:
+            return json_error(message=str(e), status=400)
 
 @require_http_methods(["GET", "PUT"])
 @api_login_required
@@ -302,7 +325,10 @@ def post_sales_view(request, pk):
             "status": bill.status
         }, message=f"Sales bill {bill.bill_number} posted successfully. Stock consumed via FIFO.")
     except ValidationError as e:
-        return json_error(message=str(e.messages[0]) if hasattr(e, 'messages') else str(e), status=400)
+        msg = str(e.messages[0]) if hasattr(e, 'messages') and e.messages else str(e)
+        return json_error(message=msg, status=400)
+    except Exception as e:
+        return json_error(message=str(e), status=400)
 
 @require_http_methods(["POST"])
 @api_login_required
@@ -318,7 +344,10 @@ def reverse_sales_view(request, pk):
             "status": bill.status
         }, message=f"Sales bill {bill.bill_number} reversed successfully. Inventory restored.")
     except ValidationError as e:
-        return json_error(message=str(e.messages[0]) if hasattr(e, 'messages') else str(e), status=400)
+        msg = str(e.messages[0]) if hasattr(e, 'messages') and e.messages else str(e)
+        return json_error(message=msg, status=400)
+    except Exception as e:
+        return json_error(message=str(e), status=400)
 
 @require_http_methods(["GET", "POST"])
 @api_login_required

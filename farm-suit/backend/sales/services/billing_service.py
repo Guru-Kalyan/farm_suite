@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
@@ -51,13 +51,13 @@ def save_sales_bill(data, user, bill_id=None):
         raise ValidationError({"items": ["At least one item is required in the sales bill"]})
 
     try:
-        discount = Decimal(str(data.get("discount", "0.00")))
-        transport_cost = Decimal(str(data.get("transport_cost", "0.00")))
-        packaging_cost = Decimal(str(data.get("packaging_cost", "0.00")))
-        other_selling_expenses = Decimal(str(data.get("other_selling_expenses", "0.00")))
+        discount = Decimal(str(data.get("discount") or "0.00"))
+        transport_cost = Decimal(str(data.get("transport_cost") or "0.00"))
+        packaging_cost = Decimal(str(data.get("packaging_cost") or "0.00"))
+        other_selling_expenses = Decimal(str(data.get("other_selling_expenses") or "0.00"))
         if discount < 0 or transport_cost < 0 or packaging_cost < 0 or other_selling_expenses < 0:
             raise ValueError
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, InvalidOperation):
         raise ValidationError("Discounts and expenses must be non-negative decimals")
     tax_amount = Decimal('0.00')
 
@@ -66,11 +66,11 @@ def save_sales_bill(data, user, bill_id=None):
     for idx, it in enumerate(items_data):
         item_id = it.get("item_id")
         try:
-            qty = Decimal(str(it.get("quantity", "0")))
-            rate = Decimal(str(it.get("selling_rate", "0")))
+            qty = Decimal(str(it.get("quantity") or "0"))
+            rate = Decimal(str(it.get("selling_rate") or "0"))
             if qty <= 0 or rate < 0:
                 raise ValueError
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, InvalidOperation):
             raise ValidationError({f"items[{idx}]": ["Quantity must be > 0 and selling rate must be >= 0"]})
         subtotal += (qty * rate).quantize(Decimal('0.01'))
 
@@ -167,17 +167,19 @@ def post_sales_bill(bill_id, items_data, user):
 
     for it in items_data:
         item_id = it.get("item_id")
+        if not item_id:
+            raise ValidationError("Item is required for each line")
         try:
             item = Item.objects.get(pk=item_id)
-        except Item.DoesNotExist:
+        except (Item.DoesNotExist, ValueError, TypeError):
             raise ValidationError(f"Item with id {item_id} does not exist")
 
         try:
-            qty_needed = Decimal(str(it.get("quantity", "0")))
-            selling_rate = Decimal(str(it.get("selling_rate", "0")))
+            qty_needed = Decimal(str(it.get("quantity") or "0"))
+            selling_rate = Decimal(str(it.get("selling_rate") or "0"))
             if qty_needed <= 0 or selling_rate < 0:
                 raise ValueError
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, InvalidOperation):
             raise ValidationError(f"Invalid quantity or selling rate for item {item.name}")
 
         # Check total available stock
