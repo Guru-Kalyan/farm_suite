@@ -13,6 +13,9 @@ export const ordersApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  deleteOrder: (id) => apiClient(`/api/orders/${id}/`, {
+    method: 'DELETE'
+  }),
   updateStatus: (id, status, notes = '') => apiClient(`/api/orders/${id}/status/`, {
     method: 'POST',
     body: JSON.stringify({ status, notes })

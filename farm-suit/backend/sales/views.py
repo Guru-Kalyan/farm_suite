@@ -2,7 +2,9 @@ import datetime
 from decimal import Decimal
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
-from django.db.models import Q, Sum, Count
+from django.db.models import Q, Sum, Count, ProtectedError
+from accounts.services.permission_service import has_permission
+from audit.services.audit_service import record_audit
 from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -189,7 +191,7 @@ def sales_view(request):
         except Exception as e:
             return json_error(message=str(e), status=400)
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def sales_detail_view(request, pk):
     try:
@@ -306,6 +308,45 @@ def sales_detail_view(request, pk):
                 errors=e.message_dict if hasattr(e, 'message_dict') else {"detail": e.messages},
                 status=400
             )
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "sales.delete"):
+            return json_error("Forbidden: You do not have permission to delete sales bills.", status=403)
+
+        if bill.status == 'POSTED':
+            if bill.amount_paid > Decimal('0.00'):
+                return json_error(f"Cannot delete sales bill {bill.bill_number}: Active customer payments amounting to ₹{bill.amount_paid} are recorded. Please delete payments first.", status=400)
+            try:
+                reverse_sales_bill(pk, request.user, reason="Auto-reversal before bill deletion")
+                bill.refresh_from_db()
+            except ValidationError as e:
+                msg = str(e.messages[0]) if hasattr(e, 'messages') and e.messages else str(e)
+                return json_error(f"Cannot delete: {msg}", status=400)
+
+        old_values = {
+            "bill_number": bill.bill_number,
+            "customer": bill.customer.customer_name,
+            "grand_total": str(bill.grand_total),
+            "status": bill.status
+        }
+        b_num = bill.bill_number
+        try:
+            with transaction.atomic():
+                bill.lines.all().delete()
+                bill.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete sales bill {b_num}: Protected relationships exist.", status=400)
+
+        record_audit(
+            user=request.user,
+            model_name="SalesBill",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Sales Bill '{b_num}'"
+        )
+        return json_success(message=f"Sales bill '{b_num}' deleted successfully")
+
 
 @require_http_methods(["POST"])
 @api_login_required
@@ -474,6 +515,54 @@ def all_sales_payments_view(request):
         "total_amount": str(total_amount),
         "pagination": paginated['pagination']
     })
+
+
+@require_http_methods(["DELETE"])
+@api_login_required
+def sales_payment_detail_view(request, pk):
+    if not has_permission(request.user, "sales.delete"):
+        return json_error("Forbidden: You do not have permission to delete payments.", status=403)
+    try:
+        payment = SalesPayment.objects.select_related('sales_bill', 'customer').get(pk=pk)
+    except SalesPayment.DoesNotExist:
+        return json_error("Sales payment record not found", status=404)
+
+    bill = payment.sales_bill
+    pay_amt = payment.amount
+    pay_id = payment.id
+    old_values = {
+        "payment_date": str(payment.payment_date),
+        "amount": str(pay_amt),
+        "customer": payment.customer.customer_name,
+        "bill_number": bill.bill_number if bill else ""
+    }
+
+    with transaction.atomic():
+        payment.delete()
+        if bill:
+            bill.amount_paid = max(Decimal('0.00'), bill.amount_paid - pay_amt)
+            if bill.amount_paid <= Decimal('0.00'):
+                bill.payment_status = 'PENDING'
+            elif bill.amount_paid < bill.grand_total:
+                bill.payment_status = 'PARTIAL'
+            else:
+                bill.payment_status = 'PAID'
+            bill.save(update_fields=['amount_paid', 'payment_status', 'updated_at'])
+
+        record_audit(
+            user=request.user,
+            model_name="SalesPayment",
+            object_id=str(pay_id),
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Sales Payment of ₹{pay_amt} on Bill {bill.bill_number if bill else 'N/A'}"
+        )
+
+    return json_success({
+        "id": pay_id,
+        "bill_amount_paid": str(bill.amount_paid) if bill else "0.00",
+        "bill_payment_status": bill.payment_status if bill else ""
+    }, message="Sales payment deleted successfully and invoice balance updated.")
 
 @require_http_methods(["GET"])
 @api_login_required

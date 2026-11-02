@@ -6,10 +6,15 @@ import { Input } from '../../components/common/Input';
 import { Select } from '../../components/common/Select';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const AdvanceOrdersPage = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +66,21 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await ordersApi.deleteOrder(deleteTarget.id);
+      addToast(`Advance order '${deleteTarget.order_number}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchOrders();
+    } catch (err) {
+      addToast(err.message || 'Failed to delete advance order', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleClearFilters = () => {
     setCustomerId('');
@@ -324,9 +344,21 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
                         )}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" onClick={() => onNavigate(`/orders/${o.id}`)}>
-                          Manage →
-                        </Button>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <Button variant="ghost" size="sm" onClick={() => onNavigate(`/orders/${o.id}`)}>
+                            Manage →
+                          </Button>
+                          {hasPermission('sales.delete') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              style={{ color: 'var(--danger)' }}
+                              onClick={() => setDeleteTarget(o)}
+                            >
+                              🗑️ Delete
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -336,6 +368,20 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Advance Order: ${deleteTarget.order_number}?`}
+          message={`Are you sure you want to delete advance order "${deleteTarget.order_number}"? If this order has already been fulfilled to a sales bill, deletion will be safely prevented.`}
+          confirmText="Delete Order"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

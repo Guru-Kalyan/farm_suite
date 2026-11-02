@@ -2,15 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { adminApi } from '../../api/admin';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/common/Button';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { UserEditModal } from './UserEditModal';
 import { UserResetPasswordModal } from './UserResetPasswordModal';
 
 export const UserDetailPage = ({ userId, onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!data?.user) return;
+    try {
+      setDeleteLoading(true);
+      await adminApi.deleteUser(userId);
+      addToast(`User '${data.user.username}' deleted successfully`, 'success');
+      onNavigate('/admin/users');
+    } catch (err) {
+      addToast(err.message || 'Failed to delete user', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const fetchUserDetail = async () => {
     try {
@@ -167,6 +186,15 @@ export const UserDetailPage = ({ userId, onNavigate }) => {
           <Button variant="primary" onClick={() => setEditModalOpen(true)}>
             Edit Profile
           </Button>
+          {hasPermission('users.delete') && (
+            <Button
+              variant="danger"
+              style={{ backgroundColor: 'var(--danger)', color: '#fff', border: 'none' }}
+              onClick={() => setDeleteModalOpen(true)}
+            >
+              🗑️ Delete User
+            </Button>
+          )}
         </div>
       </div>
 
@@ -353,6 +381,20 @@ export const UserDetailPage = ({ userId, onNavigate }) => {
           isOpen={resetModalOpen}
           onClose={() => setResetModalOpen(false)}
           onPasswordReset={fetchUserDetail}
+        />
+      )}
+
+      {/* Delete User Confirmation */}
+      {deleteModalOpen && (
+        <ConfirmDialog
+          isOpen={deleteModalOpen}
+          title={`Delete User: @${user.username}?`}
+          message={`Are you sure you want to permanently delete user "${user.full_name || user.username}" (@${user.username})? If this user has dependent transactional records, deletion will be safely blocked and you can disable the account instead.`}
+          confirmText="Delete User"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteModalOpen(false)}
         />
       )}
     </div>

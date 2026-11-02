@@ -7,6 +7,7 @@ import { SearchInput } from '../../components/common/SearchInput';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { WhatsAppShareButton } from '../../components/common/WhatsAppShareButton';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadPurchaseBillPdf } from '../../utils/pdfDownload';
@@ -16,6 +17,8 @@ import { useAuth } from '../../hooks/useAuth';
 export const PurchaseListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [purchases, setPurchases] = useState([]);
   const [summary, setSummary] = useState(null);
   const [pagination, setPagination] = useState(null);
@@ -67,6 +70,21 @@ export const PurchaseListPage = ({ onNavigate, onOpenAudit }) => {
   useEffect(() => {
     fetchPurchases(1);
   }, [fetchPurchases]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await purchasesApi.deletePurchase(deleteTarget.id);
+      addToast(`Purchase bill '${deleteTarget.bill_number}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchPurchases(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete purchase bill', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleClearFilters = () => {
     setSearch('');
@@ -187,6 +205,20 @@ export const PurchaseListPage = ({ onNavigate, onOpenAudit }) => {
           <Button variant="ghost" size="sm" onClick={() => onNavigate(`/purchases/${row.id}`)}>
             View →
           </Button>
+
+          {hasPermission('purchases.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(row);
+              }}
+            >
+              🗑️ Delete
+            </Button>
+          )}
         </div>
       )
     }
@@ -451,6 +483,20 @@ export const PurchaseListPage = ({ onNavigate, onOpenAudit }) => {
       />
 
       <Pagination pagination={pagination} onPageChange={fetchPurchases} />
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Purchase Bill: ${deleteTarget.bill_number}?`}
+          message={`Are you sure you want to delete purchase bill "${deleteTarget.bill_number}"? Note: If payments exist or purchased stock has already been consumed/sold, deletion will be safely blocked.`}
+          confirmText="Delete Bill"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

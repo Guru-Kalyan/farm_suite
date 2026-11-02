@@ -1,7 +1,7 @@
 import secrets
 import string
 from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Q, Count, ProtectedError
 from django.contrib.auth.models import User
 from django.views.decorators.http import require_http_methods
 from utils.response import json_success, json_error
@@ -312,24 +312,25 @@ def admin_user_detail_view(request, user_id):
         except ValueError as e:
             return json_error(str(e), status=400)
 
+        if request.user.id == user.id:
+            return json_error("You cannot delete your own logged-in administrator account.", status=400)
+
         username = user.username
-        with transaction.atomic():
-            # For audit trail safety, soft-deactivate and dissociate
-            user.is_active = False
-            user.save()
-            profile.role = None
-            profile.save()
+        try:
+            with transaction.atomic():
+                record_audit(
+                    user=request.user,
+                    model_name="User",
+                    object_id=str(user.id),
+                    action="DELETE",
+                    description=f"Admin deleted user {username}",
+                    ip_address=get_client_ip(request)
+                )
+                user.delete()
+        except ProtectedError:
+            return json_error(f"Cannot permanently delete user '{username}': Dependent transactional records exist. You can disable this account instead.", status=400)
 
-            record_audit(
-                user=request.user,
-                model_name="User",
-                object_id=str(user.id),
-                action="DELETE",
-                description=f"Admin deleted / deactivated user {username}",
-                ip_address=get_client_ip(request)
-            )
-
-        return json_success(message=f"User {username} deactivated successfully.")
+        return json_success(message=f"User '{username}' deleted successfully.")
 
 
 @require_http_methods(["POST"])

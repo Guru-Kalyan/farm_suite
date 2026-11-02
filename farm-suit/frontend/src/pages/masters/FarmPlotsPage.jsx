@@ -8,10 +8,15 @@ import { Input } from '../../components/common/Input';
 import { Select } from '../../components/common/Select';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const FarmPlotsPage = ({ onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [plots, setPlots] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +55,21 @@ export const FarmPlotsPage = ({ onOpenAudit }) => {
   useEffect(() => {
     fetchPlots(1);
   }, [fetchPlots]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await mastersApi.deleteFarmPlot(deleteTarget.id);
+      addToast(`Farm Plot '${deleteTarget.name}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchPlots(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete farm plot', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleOpenCreate = () => {
     setEditingPlot(null);
@@ -144,9 +164,21 @@ export const FarmPlotsPage = ({ onOpenAudit }) => {
       header: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
-          ✏️ Edit
-        </Button>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
+            ✏️ Edit
+          </Button>
+          {hasPermission('farms.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -237,6 +269,20 @@ export const FarmPlotsPage = ({ onOpenAudit }) => {
           />
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Farm Plot: ${deleteTarget.name}?`}
+          message={`Are you sure you want to delete plot "${deleteTarget.name}"? If active cultivation batches are linked to this plot, deletion will be safely prevented.`}
+          confirmText="Delete Plot"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

@@ -2,7 +2,10 @@ import datetime
 from decimal import Decimal
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
-from django.db.models import Q, Sum, Count
+from django.db import transaction
+from django.db.models import Q, Sum, Count, ProtectedError
+from accounts.services.permission_service import has_permission
+from audit.services.audit_service import record_audit
 from django.utils import timezone
 from utils.response import json_success, json_error
 from utils.decorators import api_login_required, parse_json_body
@@ -161,7 +164,7 @@ def orders_view(request):
                 status=400
             )
 
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "DELETE"])
 @api_login_required
 def order_detail_view(request, pk):
     try:
@@ -171,71 +174,105 @@ def order_detail_view(request, pk):
     except Order.DoesNotExist:
         return json_error("Order not found", status=404)
 
-    lines_data = [{
-        "id": l.id,
-        "item": {
-            "id": l.item.id,
-            "name": l.item.name,
-            "item_code": l.item.item_code,
-            "unit": l.item.unit.short_name
-        },
-        "quantity": str(l.quantity),
-        "unit_rate": str(l.unit_rate),
-        "amount": str(l.amount),
-        "notes": l.notes
-    } for l in order.lines.all()]
+    if request.method == "GET":
+        lines_data = [{
+            "id": l.id,
+            "item": {
+                "id": l.item.id,
+                "name": l.item.name,
+                "item_code": l.item.item_code,
+                "unit": l.item.unit.short_name
+            },
+            "quantity": str(l.quantity),
+            "unit_rate": str(l.unit_rate),
+            "amount": str(l.amount),
+            "notes": l.notes
+        } for l in order.lines.all()]
 
-    advances_data = [{
-        "id": a.id,
-        "payment_date": a.payment_date,
-        "amount": str(a.amount),
-        "payment_method": a.payment_method,
-        "payment_method_display": a.get_payment_method_display(),
-        "reference_number": a.reference_number,
-        "notes": a.notes,
-        "recorded_by": a.recorded_by.username if a.recorded_by else "",
-        "created_at": a.created_at
-    } for a in order.advances.all()]
+        advances_data = [{
+            "id": a.id,
+            "payment_date": a.payment_date,
+            "amount": str(a.amount),
+            "payment_method": a.payment_method,
+            "payment_method_display": a.get_payment_method_display(),
+            "reference_number": a.reference_number,
+            "notes": a.notes,
+            "recorded_by": a.recorded_by.username if a.recorded_by else "",
+            "created_at": a.created_at
+        } for a in order.advances.all()]
 
-    return json_success({
-        "id": order.id,
-        "order_number": order.order_number,
-        "order_type": order.order_type,
-        "order_type_display": order.get_order_type_display(),
-        "customer": {
-            "id": order.customer.id,
-            "customer_name": order.customer.customer_name,
-            "customer_code": order.customer.customer_code,
-            "name": order.customer.customer_name,
-            "code": order.customer.customer_code,
-            "phone": order.customer.phone,
-            "address": order.customer.address,
-            "gst_number": order.customer.gst_number
-        },
-        "order_date": order.order_date,
-        "delivery_date": order.delivery_date,
-        "status": order.status,
-        "subtotal": str(order.subtotal),
-        "tax_amount": str(order.tax_amount),
-        "discount": str(order.discount),
-        "total_amount": str(order.total_amount),
-        "advance_amount": str(order.advance_amount),
-        "remaining_balance": str(order.remaining_balance),
-        "delivery_address": order.delivery_address,
-        "delivery_instructions": order.delivery_instructions,
-        "notes": order.notes,
-        "fulfilled_sales_bill": {
-            "id": order.fulfilled_sales_bill.id,
-            "bill_number": order.fulfilled_sales_bill.bill_number,
-            "grand_total": str(order.fulfilled_sales_bill.grand_total),
-            "status": order.fulfilled_sales_bill.status
-        } if order.fulfilled_sales_bill else None,
-        "created_by": order.created_by.username if order.created_by else "",
-        "lines": lines_data,
-        "advances": advances_data,
-        "created_at": order.created_at,
-        "updated_at": order.updated_at
-    })
+        return json_success({
+            "id": order.id,
+            "order_number": order.order_number,
+            "order_type": order.order_type,
+            "order_type_display": order.get_order_type_display(),
+            "customer": {
+                "id": order.customer.id,
+                "customer_name": order.customer.customer_name,
+                "customer_code": order.customer.customer_code,
+                "name": order.customer.customer_name,
+                "code": order.customer.customer_code,
+                "phone": order.customer.phone,
+                "address": order.customer.address,
+                "gst_number": order.customer.gst_number
+            },
+            "order_date": order.order_date,
+            "delivery_date": order.delivery_date,
+            "status": order.status,
+            "subtotal": str(order.subtotal),
+            "tax_amount": str(order.tax_amount),
+            "discount": str(order.discount),
+            "total_amount": str(order.total_amount),
+            "advance_amount": str(order.advance_amount),
+            "remaining_balance": str(order.remaining_balance),
+            "delivery_address": order.delivery_address,
+            "delivery_instructions": order.delivery_instructions,
+            "notes": order.notes,
+            "fulfilled_sales_bill": {
+                "id": order.fulfilled_sales_bill.id,
+                "bill_number": order.fulfilled_sales_bill.bill_number,
+                "grand_total": str(order.fulfilled_sales_bill.grand_total),
+                "status": order.fulfilled_sales_bill.status
+            } if order.fulfilled_sales_bill else None,
+            "created_by": order.created_by.username if order.created_by else "",
+            "lines": lines_data,
+            "advances": advances_data,
+            "created_at": order.created_at,
+            "updated_at": order.updated_at
+        })
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "sales.delete"):
+            return json_error("Forbidden: You do not have permission to delete orders.", status=403)
+
+        if order.fulfilled_sales_bill:
+            return json_error(f"Cannot delete order {order.order_number}: It is fulfilled to Sales Bill {order.fulfilled_sales_bill.bill_number}. Please delete or resolve the sales bill first.", status=400)
+
+        old_values = {
+            "order_number": order.order_number,
+            "customer": order.customer.customer_name,
+            "total_amount": str(order.total_amount),
+            "status": order.status
+        }
+        o_num = order.order_number
+        try:
+            with transaction.atomic():
+                order.lines.all().delete()
+                order.advances.all().delete()
+                order.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete order {o_num}: Dependent relationships exist.", status=400)
+
+        record_audit(
+            user=request.user,
+            model_name="Order",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Order '{o_num}'"
+        )
+        return json_success(message=f"Order '{o_num}' deleted successfully")
+
 
 @require_http_methods(["POST"])
 @api_login_required

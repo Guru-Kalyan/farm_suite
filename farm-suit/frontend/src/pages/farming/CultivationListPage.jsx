@@ -6,6 +6,7 @@ import { SearchInput } from '../../components/common/SearchInput';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../hooks/useAuth';
@@ -13,6 +14,8 @@ import { useAuth } from '../../hooks/useAuth';
 export const CultivationListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [batches, setBatches] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,21 @@ export const CultivationListPage = ({ onNavigate, onOpenAudit }) => {
   useEffect(() => {
     fetchBatches(1);
   }, [fetchBatches]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await farmingApi.deleteBatch(deleteTarget.id);
+      addToast(`Cultivation batch '${deleteTarget.batch_number}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchBatches(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete cultivation batch', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const columns = [
     {
@@ -88,9 +106,21 @@ export const CultivationListPage = ({ onNavigate, onOpenAudit }) => {
       header: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => onNavigate(`/harvests/new?batch_id=${row.id}`)}>
-          🚜 Harvest →
-        </Button>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => onNavigate(`/harvests/new?batch_id=${row.id}`)}>
+            🚜 Harvest →
+          </Button>
+          {hasPermission('crops.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -145,6 +175,20 @@ export const CultivationListPage = ({ onNavigate, onOpenAudit }) => {
 
       <DataTable columns={columns} data={batches} loading={loading} emptyMessage="No cultivation batches found." />
       <Pagination pagination={pagination} onPageChange={fetchBatches} />
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Cultivation Batch: ${deleteTarget.batch_number}?`}
+          message={`Are you sure you want to delete batch "${deleteTarget.batch_number}"? If linked harvest records exist, deletion will be safely prevented.`}
+          confirmText="Delete Batch"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

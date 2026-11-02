@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('', views.sales_view, name='sales-list-create'),
     path('payments/', views.all_sales_payments_view, name='sales-payments-all'),
+    path('payments/<int:pk>/', views.sales_payment_detail_view, name='sales-payment-detail'),
     path('<int:pk>/', views.sales_detail_view, name='sales-detail-update'),
     path('<int:pk>/post/', views.post_sales_view, name='sales-post'),
     path('<int:pk>/reverse/', views.reverse_sales_view, name='sales-reverse'),

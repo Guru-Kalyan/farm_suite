@@ -5,10 +5,15 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Select } from '../../components/common/Select';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const VendorPaymentsPage = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [payments, setPayments] = useState([]);
   const [totalAmount, setTotalAmount] = useState('0.00');
   const [loading, setLoading] = useState(true);
@@ -53,6 +58,21 @@ export const VendorPaymentsPage = ({ onNavigate }) => {
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await purchasesApi.deleteVendorPayment(deleteTarget.id);
+      addToast('Vendor payment deleted successfully', 'success');
+      setDeleteTarget(null);
+      fetchPayments();
+    } catch (err) {
+      addToast(err.message || 'Failed to delete vendor payment', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleClearFilters = () => {
     setVendorId('');
@@ -199,6 +219,7 @@ export const VendorPaymentsPage = ({ onNavigate }) => {
                   <th style={{ padding: '12px 16px', textAlign: 'left' }}>Reference #</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left' }}>Recorded By</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left' }}>Notes</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,6 +272,18 @@ export const VendorPaymentsPage = ({ onNavigate }) => {
                     <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>
                       {p.notes || '—'}
                     </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      {hasPermission('purchases.delete') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          style={{ color: 'var(--danger)' }}
+                          onClick={() => setDeleteTarget(p)}
+                        >
+                          🗑️ Delete
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -258,6 +291,20 @@ export const VendorPaymentsPage = ({ onNavigate }) => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title="Delete Vendor Payment?"
+          message={`Are you sure you want to delete this payment of ${formatCurrency(deleteTarget.amount)} made to ${deleteTarget.vendor?.vendor_name}? The corresponding purchase bill balance will be automatically restored.`}
+          confirmText="Delete Payment"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

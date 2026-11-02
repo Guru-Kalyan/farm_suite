@@ -5,9 +5,12 @@ import { Button } from '../../components/common/Button';
 import { Modal } from '../../components/common/Modal';
 import { Input } from '../../components/common/Input';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const UnitsPage = ({ onOpenAudit }) => {
+  const { hasPermission } = useAuth();
   const { addToast } = useToast();
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +20,10 @@ export const UnitsPage = ({ onOpenAudit }) => {
   const [shortName, setShortName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Delete State
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchUnits = async () => {
     try {
@@ -65,6 +72,21 @@ export const UnitsPage = ({ onOpenAudit }) => {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await mastersApi.deleteUnit(deleteTarget.id);
+      addToast(`Unit '${deleteTarget.name}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchUnits();
+    } catch (err) {
+      addToast(err.message || 'Failed to delete unit', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const columns = [
     {
       key: 'name',
@@ -96,6 +118,25 @@ export const UnitsPage = ({ onOpenAudit }) => {
       key: 'is_active',
       header: 'Status',
       render: (val) => <span style={{ color: val ? 'var(--success)' : 'var(--text-muted)' }}>{val ? 'Active' : 'Inactive'}</span>
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (_, row) => (
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          {hasPermission('inventory.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
+      )
     }
   ];
 
@@ -145,6 +186,20 @@ export const UnitsPage = ({ onOpenAudit }) => {
           />
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Unit: ${deleteTarget.name}?`}
+          message={`Are you sure you want to delete unit "${deleteTarget.name}" (${deleteTarget.short_name})? If items are currently linked to this unit, deletion will be safely prevented.`}
+          confirmText="Delete Unit"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

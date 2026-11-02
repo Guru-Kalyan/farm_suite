@@ -1,6 +1,8 @@
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Q, ProtectedError
+from accounts.services.permission_service import has_permission
+from audit.services.audit_service import record_audit
 from utils.response import json_success, json_error
 from utils.decorators import api_login_required, parse_json_body
 from masters.views import paginate_queryset
@@ -76,7 +78,7 @@ def cultivation_batches_view(request):
                 status=400
             )
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def cultivation_batch_detail_view(request, pk):
     try:
@@ -112,7 +114,7 @@ def cultivation_batch_detail_view(request, pk):
             "start_date": batch.start_date,
             "expected_harvest_date": batch.expected_harvest_date,
             "actual_harvest_date": batch.actual_harvest_date,
-            "area": str(batch.area),
+            "area": str(b_area := batch.area),
             "cultivated_quantity": str(batch.cultivated_quantity),
             "status": batch.status,
             "remarks": batch.remarks,
@@ -138,6 +140,25 @@ def cultivation_batch_detail_view(request, pk):
                 errors=e.message_dict if hasattr(e, 'message_dict') else {"detail": e.messages},
                 status=400
             )
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "crops.delete"):
+            return json_error("Forbidden: You do not have permission to delete cultivation batches.", status=403)
+        old_values = {"batch_number": batch.batch_number, "crop": batch.item.name}
+        b_num = batch.batch_number
+        try:
+            batch.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Batch '{b_num}': Linked harvest records exist.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="CultivationBatch",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Cultivation Batch '{b_num}'"
+        )
+        return json_success(message=f"Cultivation batch '{b_num}' deleted successfully")
 
 # ----------------- HARVEST -----------------
 @require_http_methods(["GET", "POST"])
@@ -208,7 +229,7 @@ def harvests_view(request):
                 status=400
             )
 
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "DELETE"])
 @api_login_required
 def harvest_detail_view(request, pk):
     try:
@@ -216,38 +237,63 @@ def harvest_detail_view(request, pk):
     except Harvest.DoesNotExist:
         return json_error("Harvest not found", status=404)
 
-    lots_data = [{
-        "lot_id": lot.id,
-        "lot_number": lot.lot_number,
-        "available_quantity": str(lot.available_quantity),
-        "status": lot.status
-    } for lot in h.inventory_lots.all()]
+    if request.method == "GET":
+        lots_data = [{
+            "lot_id": lot.id,
+            "lot_number": lot.lot_number,
+            "available_quantity": str(lot.available_quantity),
+            "status": lot.status
+        } for lot in h.inventory_lots.all()]
 
-    return json_success({
-        "id": h.id,
-        "harvest_number": h.harvest_number,
-        "batch": {
-            "id": h.cultivation_batch.id,
-            "batch_number": h.cultivation_batch.batch_number,
-            "crop": h.cultivation_batch.item.name,
-            "plot": h.cultivation_batch.farm_plot.name
-        },
-        "item": {
-            "id": h.cultivation_batch.item.id,
-            "name": h.cultivation_batch.item.name,
-            "unit": h.cultivation_batch.item.unit.short_name
-        },
-        "harvest_date": h.harvest_date,
-        "quantity": str(h.quantity),
-        "unit_cost": str(h.unit_cost),
-        "total_cost": str(h.total_cost),
-        "quality_grade": h.quality_grade,
-        "status": h.status,
-        "accepted_by": h.accepted_by.username if h.accepted_by else "",
-        "remarks": h.remarks,
-        "lots": lots_data,
-        "created_at": h.created_at
-    })
+        return json_success({
+            "id": h.id,
+            "harvest_number": h.harvest_number,
+            "batch": {
+                "id": h.cultivation_batch.id,
+                "batch_number": h.cultivation_batch.batch_number,
+                "crop": h.cultivation_batch.item.name,
+                "plot": h.cultivation_batch.farm_plot.name
+            },
+            "item": {
+                "id": h.cultivation_batch.item.id,
+                "name": h.cultivation_batch.item.name,
+                "unit": h.cultivation_batch.item.unit.short_name
+            },
+            "harvest_date": h.harvest_date,
+            "quantity": str(h.quantity),
+            "unit_cost": str(h.unit_cost),
+            "total_cost": str(h.total_cost),
+            "quality_grade": h.quality_grade,
+            "status": h.status,
+            "accepted_by": h.accepted_by.username if h.accepted_by else "",
+            "remarks": h.remarks,
+            "lots": lots_data,
+            "created_at": h.created_at
+        })
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "crops.delete"):
+            return json_error("Forbidden: You do not have permission to delete harvest records.", status=403)
+        if h.status == 'POSTED':
+            for lot in h.inventory_lots.all():
+                if lot.available_quantity < lot.initial_quantity:
+                    return json_error(f"Cannot delete Harvest '{h.harvest_number}': Stock lot {lot.lot_number} has already been consumed in sales or adjustments.", status=400)
+        old_values = {"harvest_number": h.harvest_number, "quantity": str(h.quantity), "status": h.status}
+        h_num = h.harvest_number
+        try:
+            h.inventory_lots.all().delete()
+            h.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Harvest '{h_num}': Active inventory or movements are linked.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="Harvest",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Harvest Record '{h_num}'"
+        )
+        return json_success(message=f"Harvest record '{h_num}' deleted successfully")
 
 @require_http_methods(["POST"])
 @api_login_required

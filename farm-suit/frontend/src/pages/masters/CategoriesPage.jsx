@@ -7,9 +7,12 @@ import { Modal } from '../../components/common/Modal';
 import { Input } from '../../components/common/Input';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const CategoriesPage = ({ onOpenAudit }) => {
+  const { hasPermission } = useAuth();
   const { addToast } = useToast();
   const [categories, setCategories] = useState([]);
   const [pagination, setPagination] = useState(null);
@@ -22,6 +25,10 @@ export const CategoriesPage = ({ onOpenAudit }) => {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Delete State
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchCategories = useCallback(async (page = 1) => {
     try {
@@ -87,6 +94,21 @@ export const CategoriesPage = ({ onOpenAudit }) => {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await mastersApi.deleteCategory(deleteTarget.id);
+      addToast(`Category '${deleteTarget.name}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchCategories(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete category', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const columns = [
     {
       key: 'name',
@@ -108,9 +130,21 @@ export const CategoriesPage = ({ onOpenAudit }) => {
       header: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
-          ✏️ Edit
-        </Button>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
+            ✏️ Edit
+          </Button>
+          {hasPermission('inventory.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -173,6 +207,20 @@ export const CategoriesPage = ({ onOpenAudit }) => {
           />
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Category: ${deleteTarget.name}?`}
+          message={`Are you sure you want to delete category "${deleteTarget.name}"? If items are currently linked to this category, deletion will be safely prevented.`}
+          confirmText="Delete Category"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

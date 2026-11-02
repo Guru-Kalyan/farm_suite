@@ -7,10 +7,15 @@ import { Modal } from '../../components/common/Modal';
 import { Input } from '../../components/common/Input';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const VendorsPage = ({ onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +55,21 @@ export const VendorsPage = ({ onOpenAudit }) => {
   useEffect(() => {
     fetchVendors(1);
   }, [fetchVendors]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await mastersApi.deleteVendor(deleteTarget.id);
+      addToast(`Vendor '${deleteTarget.vendor_name}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchVendors(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete vendor', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleOpenCreate = () => {
     setEditingVendor(null);
@@ -140,9 +160,21 @@ export const VendorsPage = ({ onOpenAudit }) => {
       header: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
-          ✏️ Edit
-        </Button>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
+            ✏️ Edit
+          </Button>
+          {hasPermission('vendors.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -248,6 +280,20 @@ export const VendorsPage = ({ onOpenAudit }) => {
           />
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Vendor: ${deleteTarget.vendor_name}?`}
+          message={`Are you sure you want to delete vendor "${deleteTarget.vendor_name}" (${deleteTarget.vendor_code})? If purchase bills or transactions exist for this vendor, deletion will be safely prevented.`}
+          confirmText="Delete Vendor"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

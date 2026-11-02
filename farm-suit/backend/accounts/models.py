@@ -109,3 +109,41 @@ class SecuritySettings(models.Model):
 
     def __str__(self):
         return "Farm Suit Security Settings"
+
+
+class Expense(models.Model):
+    EXPENSE_TYPE_CHOICES = [
+        ('DEPARTMENT', 'Department Expenses'),
+        ('LABOUR', 'Labour Expenses'),
+        ('MEDICINE', 'Medicine Expenses'),
+        ('TOOLS', 'Tools Expenses'),
+        ('TRANSPORT', 'Transport Expenses'),
+    ]
+
+    PAYMENT_MODE_CHOICES = [
+        ('CASH', 'Cash'),
+        ('BANK_TRANSFER', 'Bank Transfer / NEFT'),
+        ('UPI', 'UPI / Online'),
+        ('CHEQUE', 'Cheque'),
+        ('OTHER', 'Other'),
+    ]
+
+    expense_number = models.CharField(max_length=50, unique=True, db_index=True)
+    expense_type = models.CharField(max_length=30, choices=EXPENSE_TYPE_CHOICES, db_index=True)
+    title = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    expense_date = models.DateField(db_index=True)
+    payment_mode = models.CharField(max_length=30, choices=PAYMENT_MODE_CHOICES, default='CASH')
+    payee_name = models.CharField(max_length=150, blank=True)
+    department_name = models.CharField(max_length=100, blank=True)
+    reference_no = models.CharField(max_length=100, blank=True)
+    remarks = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-expense_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.expense_number} - {self.get_expense_type_display()} ({self.amount})"

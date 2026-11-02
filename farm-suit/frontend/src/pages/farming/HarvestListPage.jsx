@@ -6,6 +6,7 @@ import { SearchInput } from '../../components/common/SearchInput';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../hooks/useAuth';
@@ -13,6 +14,8 @@ import { useAuth } from '../../hooks/useAuth';
 export const HarvestListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [harvests, setHarvests] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,21 @@ export const HarvestListPage = ({ onNavigate, onOpenAudit }) => {
   useEffect(() => {
     fetchHarvests(1);
   }, [fetchHarvests]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await farmingApi.deleteHarvest(deleteTarget.id);
+      addToast(`Harvest '${deleteTarget.harvest_number}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchHarvests(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete harvest record', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handlePost = async (id, harvestNumber) => {
     try {
@@ -118,6 +136,16 @@ export const HarvestListPage = ({ onNavigate, onOpenAudit }) => {
               ✅ Post to Stock
             </Button>
           )}
+          {hasPermission('crops.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
         </div>
       )
     }
@@ -170,6 +198,20 @@ export const HarvestListPage = ({ onNavigate, onOpenAudit }) => {
 
       <DataTable columns={columns} data={harvests} loading={loading} emptyMessage="No harvests recorded yet." />
       <Pagination pagination={pagination} onPageChange={fetchHarvests} />
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Harvest Record: ${deleteTarget.harvest_number}?`}
+          message={`Are you sure you want to delete harvest record "${deleteTarget.harvest_number}"? If stock lots generated from this harvest have already been consumed or sold, deletion will be safely prevented.`}
+          confirmText="Delete Harvest"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

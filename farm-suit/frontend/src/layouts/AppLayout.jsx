@@ -108,6 +108,8 @@ export const AppLayout = ({
       {
         label: 'Accounts / Wallet',
         items: [
+          { path: '/accounts/expenses/create', label: 'Expenditure Entry', icon: '💸', requiredPerm: 'expenses.create' },
+          { path: '/accounts/expenses', label: 'Expenditure History', icon: '📊', requiredPerm: 'expenses.view' },
           { path: '/accounts/customers', label: 'Customer Accounts', icon: '👥', requiredPerm: 'customers.view' },
           { path: '/accounts/vendors', label: 'Vendor Accounts', icon: '🏢', requiredPerm: 'vendors.view' },
           { path: '/accounts/receivables', label: 'Receivables', icon: '🎯', requiredPerm: 'customers.view' },

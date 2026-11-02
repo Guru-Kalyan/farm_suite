@@ -59,6 +59,8 @@ import { VendorStatementPage } from './pages/accounts/VendorStatementPage';
 import { ReceivablesPrioritizationPage } from './pages/accounts/ReceivablesPrioritizationPage';
 import { PayablesPrioritizationPage } from './pages/accounts/PayablesPrioritizationPage';
 import { TransactionStatementsPage } from './pages/accounts/TransactionStatementsPage';
+import { ExpenseCreatePage } from './pages/accounts/ExpenseCreatePage';
+import { ExpenseHistoryPage } from './pages/accounts/ExpenseHistoryPage';
 
 // Reports
 import { ProfitReportPage } from './pages/reports/ProfitReportPage';
@@ -107,6 +109,8 @@ const getSidebarActivePath = (pathWithQuery) => {
   if (path.startsWith('/orders')) return '/orders/regular';
 
   // Accounts
+  if (path.startsWith('/accounts/expenses/create')) return '/accounts/expenses/create';
+  if (path.startsWith('/accounts/expenses')) return '/accounts/expenses';
   if (path.startsWith('/accounts/customers')) return '/accounts/customers';
   if (path.startsWith('/accounts/vendors')) return '/accounts/vendors';
   if (path.startsWith('/accounts/receivables')) return '/accounts/receivables';
@@ -301,6 +305,14 @@ export const App = () => {
     if (customerStatementMatch) {
       if (!hasPermission('customers.view')) return <AccessRestricted onNavigate={navigate} />;
       return <CustomerStatementPage id={customerStatementMatch[1]} onNavigate={navigate} />;
+    }
+    if (pathname === '/accounts/expenses/create') {
+      if (!hasPermission('expenses.create')) return <AccessRestricted onNavigate={navigate} />;
+      return <ExpenseCreatePage onNavigate={navigate} />;
+    }
+    if (pathname === '/accounts/expenses') {
+      if (!hasPermission('expenses.view')) return <AccessRestricted onNavigate={navigate} />;
+      return <ExpenseHistoryPage onNavigate={navigate} />;
     }
     if (pathname === '/accounts/customers') {
       if (!hasPermission('customers.view')) return <AccessRestricted onNavigate={navigate} />;

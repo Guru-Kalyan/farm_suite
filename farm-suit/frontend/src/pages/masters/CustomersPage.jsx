@@ -7,10 +7,15 @@ import { Modal } from '../../components/common/Modal';
 import { Input } from '../../components/common/Input';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const CustomersPage = ({ onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +54,21 @@ export const CustomersPage = ({ onOpenAudit }) => {
   useEffect(() => {
     fetchCustomers(1);
   }, [fetchCustomers]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await mastersApi.deleteCustomer(deleteTarget.id);
+      addToast(`Customer '${deleteTarget.customer_name}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchCustomers(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete customer', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleOpenCreate = () => {
     setEditingCustomer(null);
@@ -132,9 +152,21 @@ export const CustomersPage = ({ onOpenAudit }) => {
       header: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
-          ✏️ Edit
-        </Button>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
+            ✏️ Edit
+          </Button>
+          {hasPermission('customers.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -232,6 +264,20 @@ export const CustomersPage = ({ onOpenAudit }) => {
           />
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Customer: ${deleteTarget.customer_name}?`}
+          message={`Are you sure you want to delete customer "${deleteTarget.customer_name}" (${deleteTarget.customer_code})? If sales bills or orders exist for this customer, deletion will be safely prevented.`}
+          confirmText="Delete Customer"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

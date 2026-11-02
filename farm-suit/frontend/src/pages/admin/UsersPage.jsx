@@ -5,12 +5,14 @@ import { Button } from '../../components/common/Button';
 import { SearchInput } from '../../components/common/SearchInput';
 import { Pagination } from '../../components/common/Pagination';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { UserCreateWizard } from './UserCreateWizard';
 import { UserEditModal } from './UserEditModal';
 import { UserResetPasswordModal } from './UserResetPasswordModal';
 
 export const UsersPage = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,23 @@ export const UsersPage = ({ onNavigate }) => {
   const [editTargetUser, setEditTargetUser] = useState(null);
   const [resetTargetUser, setResetTargetUser] = useState(null);
   const [toggleStatusTarget, setToggleStatusTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await adminApi.deleteUser(deleteTarget.id);
+      addToast(`User '${deleteTarget.username}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchUsers(pagination.page);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete user', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const fetchRoles = async () => {
     try {
@@ -390,6 +409,25 @@ export const UsersPage = ({ onNavigate }) => {
                         >
                           {u.is_active ? 'Disable' : 'Enable'}
                         </button>
+
+                        {hasPermission('users.delete') && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(u)}
+                            style={{
+                              background: 'none',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 'var(--radius-xs)',
+                              padding: '4px 8px',
+                              fontSize: '11.5px',
+                              cursor: 'pointer',
+                              color: 'var(--danger-text)',
+                              fontWeight: '600'
+                            }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -454,6 +492,20 @@ export const UsersPage = ({ onNavigate }) => {
           variant={toggleStatusTarget.is_active ? 'danger' : 'primary'}
           onConfirm={handleToggleActiveConfirm}
           onCancel={() => setToggleStatusTarget(null)}
+        />
+      )}
+
+      {/* Delete User Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete User: @${deleteTarget.username}?`}
+          message={`Are you sure you want to permanently delete user "${deleteTarget.full_name || deleteTarget.username}" (@${deleteTarget.username})? If this user has dependent business records, deletion will be safely blocked and you can disable the account instead.`}
+          confirmText="Delete User"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
         />
       )}
     </div>

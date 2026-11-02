@@ -11,6 +11,7 @@ export const purchasesApi = {
   getPurchase: (id) => apiClient(`/api/purchases/${id}/`),
   createPurchase: (data) => apiClient('/api/purchases/', { method: 'POST', body: JSON.stringify(data) }),
   updatePurchase: (id, data) => apiClient(`/api/purchases/${id}/`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePurchase: (id) => apiClient(`/api/purchases/${id}/`, { method: 'DELETE' }),
   postPurchase: (id) => apiClient(`/api/purchases/${id}/post/`, { method: 'POST' }),
   reversePurchase: (id, reason) => apiClient(`/api/purchases/${id}/reverse/`, {
     method: 'POST',
@@ -38,6 +39,7 @@ export const purchasesApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  deleteVendorPayment: (id) => apiClient(`/api/purchases/vendor-payments/${id}/`, { method: 'DELETE' }),
 
   // Trade Profit Dashboard
   getTradeDashboard: (params = {}) => {

@@ -7,10 +7,15 @@ import { SearchInput } from '../../components/common/SearchInput';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Pagination } from '../../components/common/Pagination';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const PaymentsReceivedPage = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [payments, setPayments] = useState([]);
   const [totalAmount, setTotalAmount] = useState('0.00');
   const [pagination, setPagination] = useState(null);
@@ -57,6 +62,21 @@ export const PaymentsReceivedPage = ({ onNavigate }) => {
   useEffect(() => {
     fetchPayments(1);
   }, [fetchPayments]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await salesApi.deletePayment(deleteTarget.id);
+      addToast('Customer payment deleted successfully', 'success');
+      setDeleteTarget(null);
+      fetchPayments(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete payment', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleClearFilters = () => {
     setSearch('');
@@ -119,6 +139,25 @@ export const PaymentsReceivedPage = ({ onNavigate }) => {
       header: 'Amount Received',
       align: 'right',
       render: (val) => <span style={{ fontWeight: '800', color: 'var(--success-text)' }}>{formatCurrency(val)}</span>
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (_, row) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          {hasPermission('sales.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
+      )
     }
   ];
 
@@ -257,6 +296,20 @@ export const PaymentsReceivedPage = ({ onNavigate }) => {
       />
 
       <Pagination pagination={pagination} onPageChange={fetchPayments} />
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title="Delete Customer Payment?"
+          message={`Are you sure you want to delete this payment of ${formatCurrency(deleteTarget.amount)}? The corresponding sales invoice balance will be automatically restored.`}
+          confirmText="Delete Payment"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

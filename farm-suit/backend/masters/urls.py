@@ -8,6 +8,7 @@ urlpatterns = [
     
     # Units of Measure
     path('units/', views.units_view, name='masters-units'),
+    path('units/<int:pk>/', views.unit_detail_view, name='masters-unit-detail'),
     
     # Items
     path('items/', views.items_view, name='masters-items'),

@@ -7,6 +7,7 @@ import { SearchInput } from '../../components/common/SearchInput';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { WhatsAppShareButton } from '../../components/common/WhatsAppShareButton';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadSalesBillPdf } from '../../utils/pdfDownload';
@@ -16,6 +17,8 @@ import { useAuth } from '../../hooks/useAuth';
 export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [sales, setSales] = useState([]);
   const [summary, setSummary] = useState(null);
   const [pagination, setPagination] = useState(null);
@@ -74,6 +77,21 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
   useEffect(() => {
     fetchSales(1);
   }, [fetchSales]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await salesApi.deleteSale(deleteTarget.id);
+      addToast(`Sales bill '${deleteTarget.bill_number}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchSales(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete sales bill', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleClearFilters = () => {
     setSearch('');
@@ -193,6 +211,20 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
           <Button variant="ghost" size="sm" onClick={() => onNavigate(`/sales/${row.id}`)}>
             View →
           </Button>
+
+          {hasPermission('sales.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(row);
+              }}
+            >
+              🗑️ Delete
+            </Button>
+          )}
         </div>
       )
     }
@@ -492,6 +524,20 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
       />
 
       <Pagination pagination={pagination} onPageChange={fetchSales} />
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Sales Invoice: ${deleteTarget.bill_number}?`}
+          message={`Are you sure you want to delete sales bill "${deleteTarget.bill_number}"? Note: If payments exist for this invoice, deletion will be safely blocked.`}
+          confirmText="Delete Invoice"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

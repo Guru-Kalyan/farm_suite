@@ -8,10 +8,15 @@ import { Input } from '../../components/common/Input';
 import { Select } from '../../components/common/Select';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
 export const ItemsPage = ({ onOpenAudit }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
@@ -124,6 +129,21 @@ export const ItemsPage = ({ onOpenAudit }) => {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await mastersApi.deleteItem(deleteTarget.id);
+      addToast(`Item '${deleteTarget.name}' deleted successfully`, 'success');
+      setDeleteTarget(null);
+      fetchItems(pagination ? pagination.page : 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete item', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const columns = [
     {
       key: 'item_code',
@@ -204,9 +224,21 @@ export const ItemsPage = ({ onOpenAudit }) => {
       header: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
-          ✏️ Edit
-        </Button>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(row)}>
+            ✏️ Edit
+          </Button>
+          {hasPermission('inventory.delete') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setDeleteTarget(row)}
+            >
+              🗑️ Delete
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -357,6 +389,20 @@ export const ItemsPage = ({ onOpenAudit }) => {
           />
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title={`Delete Item: ${deleteTarget.name}?`}
+          message={`Are you sure you want to delete item "${deleteTarget.name}" (${deleteTarget.item_code})? If there are dependent stock records or transactions, deletion will be safely prevented.`}
+          confirmText="Delete Item"
+          confirmVariant="danger"
+          loading={deleteLoading}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };

@@ -9,6 +9,7 @@ export const farmingApi = {
   getBatch: (id) => apiClient(`/api/farming/cultivation/${id}/`),
   createBatch: (data) => apiClient('/api/farming/cultivation/', { method: 'POST', body: JSON.stringify(data) }),
   updateBatch: (id, data) => apiClient(`/api/farming/cultivation/${id}/`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteBatch: (id) => apiClient(`/api/farming/cultivation/${id}/`, { method: 'DELETE' }),
 
   // Harvests
   getHarvests: (params = {}) => {
@@ -18,4 +19,5 @@ export const farmingApi = {
   getHarvest: (id) => apiClient(`/api/farming/harvest/${id}/`),
   createHarvest: (data) => apiClient('/api/farming/harvest/', { method: 'POST', body: JSON.stringify(data) }),
   postHarvest: (id) => apiClient(`/api/farming/harvest/${id}/post/`, { method: 'POST' }),
+  deleteHarvest: (id) => apiClient(`/api/farming/harvest/${id}/`, { method: 'DELETE' }),
 };

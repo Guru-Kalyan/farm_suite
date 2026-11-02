@@ -1,6 +1,7 @@
 from django.views.decorators.http import require_http_methods
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, ProtectedError
+from accounts.services.permission_service import has_permission
 from decimal import Decimal, InvalidOperation
 from utils.response import json_success, json_error
 from utils.decorators import api_login_required, parse_json_body
@@ -81,7 +82,7 @@ def categories_view(request):
             "is_active": category.is_active
         }, message="Category created successfully", status=201)
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def category_detail_view(request, pk):
     try:
@@ -141,6 +142,26 @@ def category_detail_view(request, pk):
             "is_active": cat.is_active
         }, message="Category updated successfully")
 
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "inventory.delete"):
+            return json_error("Forbidden: You do not have permission to delete categories.", status=403)
+        old_values = {"name": cat.name, "description": cat.description}
+        cat_name = cat.name
+        try:
+            cat.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Category '{cat_name}': Active items are linked to this category.", status=400)
+
+        record_audit(
+            user=request.user,
+            model_name="ItemCategory",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Category '{cat_name}'"
+        )
+        return json_success(message=f"Category '{cat_name}' deleted successfully")
+
 # ----------------- UNITS OF MEASURE -----------------
 @require_http_methods(["GET", "POST"])
 @api_login_required
@@ -189,6 +210,72 @@ def units_view(request):
             "short_name": unit.short_name,
             "is_active": unit.is_active
         }, message="Unit created successfully", status=201)
+
+
+@require_http_methods(["GET", "PUT", "DELETE"])
+@api_login_required
+def unit_detail_view(request, pk):
+    try:
+        unit = UnitOfMeasure.objects.get(pk=pk)
+    except UnitOfMeasure.DoesNotExist:
+        return json_error("Unit not found", status=404)
+
+    if request.method == "GET":
+        return json_success({
+            "id": unit.id,
+            "name": unit.name,
+            "short_name": unit.short_name,
+            "is_active": unit.is_active,
+            "created_at": unit.created_at
+        })
+
+    elif request.method == "PUT":
+        data = parse_json_body(request)
+        if not data:
+            return json_error("Invalid JSON body", status=400)
+        name = data.get("name", "").strip()
+        short_name = data.get("short_name", "").strip()
+        if not name or not short_name:
+            return json_error("Name and short name are required", status=400)
+        if UnitOfMeasure.objects.filter(name__iexact=name).exclude(pk=pk).exists():
+            return json_error("Unit name already exists", status=400)
+        if UnitOfMeasure.objects.filter(short_name__iexact=short_name).exclude(pk=pk).exists():
+            return json_error("Unit short name already exists", status=400)
+        old_values = {"name": unit.name, "short_name": unit.short_name, "is_active": unit.is_active}
+        unit.name = name
+        unit.short_name = short_name
+        if "is_active" in data:
+            unit.is_active = bool(data["is_active"])
+        unit.save()
+        record_audit(
+            user=request.user,
+            model_name="UnitOfMeasure",
+            object_id=unit.id,
+            action="UPDATE",
+            old_values=old_values,
+            new_values={"name": unit.name, "short_name": unit.short_name, "is_active": unit.is_active},
+            description=f"Updated Unit '{unit.name}'"
+        )
+        return json_success({"id": unit.id, "name": unit.name, "short_name": unit.short_name, "is_active": unit.is_active}, message="Unit updated successfully")
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "inventory.delete"):
+            return json_error("Forbidden: You do not have permission to delete units.", status=403)
+        old_values = {"name": unit.name, "short_name": unit.short_name}
+        unit_name = unit.name
+        try:
+            unit.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Unit '{unit_name}': Active items are linked to this unit of measure.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="UnitOfMeasure",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Unit '{unit_name}'"
+        )
+        return json_success(message=f"Unit '{unit_name}' deleted successfully")
 
 # ----------------- ITEMS -----------------
 @require_http_methods(["GET", "POST"])
@@ -321,7 +408,7 @@ def items_view(request):
             "is_active": item.is_active
         }, message="Item created successfully", status=201)
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def item_detail_view(request, pk):
     try:
@@ -432,6 +519,25 @@ def item_detail_view(request, pk):
             "is_active": item.is_active
         }, message="Item updated successfully")
 
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "inventory.delete"):
+            return json_error("Forbidden: You do not have permission to delete items.", status=403)
+        old_values = {"name": item.name, "item_code": item.item_code}
+        item_name = item.name
+        try:
+            item.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Item '{item_name}': Active inventory lots, bills, or batches exist for this item.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="Item",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Item '{item_name}' ({item.item_code})"
+        )
+        return json_success(message=f"Item '{item_name}' deleted successfully")
+
 # ----------------- VENDORS -----------------
 @require_http_methods(["GET", "POST"])
 @api_login_required
@@ -502,7 +608,7 @@ def vendors_view(request):
             "is_active": vendor.is_active
         }, message="Vendor created successfully", status=201)
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def vendor_detail_view(request, pk):
     try:
@@ -571,6 +677,25 @@ def vendor_detail_view(request, pk):
                 description=f"Updated Vendor '{vendor.vendor_name}'"
             )
         return json_success({"id": vendor.id, "vendor_name": vendor.vendor_name}, message="Vendor updated successfully")
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "vendors.delete"):
+            return json_error("Forbidden: You do not have permission to delete vendors.", status=403)
+        old_values = {"vendor_name": vendor.vendor_name, "vendor_code": vendor.vendor_code}
+        name = vendor.vendor_name
+        try:
+            vendor.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Vendor '{name}': Purchase bills or transaction history exist for this vendor.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="Vendor",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Vendor '{name}'"
+        )
+        return json_success(message=f"Vendor '{name}' deleted successfully")
 
 # ----------------- CUSTOMERS -----------------
 @require_http_methods(["GET", "POST"])
@@ -641,7 +766,7 @@ def customers_view(request):
             "is_active": customer.is_active
         }, message="Customer created successfully", status=201)
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def customer_detail_view(request, pk):
     try:
@@ -707,6 +832,25 @@ def customer_detail_view(request, pk):
                 description=f"Updated Customer '{customer.customer_name}'"
             )
         return json_success({"id": customer.id, "customer_name": customer.customer_name}, message="Customer updated successfully")
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "customers.delete"):
+            return json_error("Forbidden: You do not have permission to delete customers.", status=403)
+        old_values = {"customer_name": customer.customer_name, "customer_code": customer.customer_code}
+        name = customer.customer_name
+        try:
+            customer.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Customer '{name}': Sales bills or orders exist for this customer.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="Customer",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Customer '{name}'"
+        )
+        return json_success(message=f"Customer '{name}' deleted successfully")
 
 # ----------------- FARM PLOTS -----------------
 @require_http_methods(["GET", "POST"])
@@ -776,7 +920,7 @@ def farm_plots_view(request):
             "is_active": plot.is_active
         }, message="Farm plot created successfully", status=201)
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def farm_plot_detail_view(request, pk):
     try:
@@ -846,3 +990,22 @@ def farm_plot_detail_view(request, pk):
                 description=f"Updated Farm Plot '{plot.name}'"
             )
         return json_success({"id": plot.id, "name": plot.name}, message="Farm plot updated successfully")
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "farms.delete"):
+            return json_error("Forbidden: You do not have permission to delete farm plots.", status=403)
+        old_values = {"name": plot.name, "location": plot.location, "area": str(plot.area)}
+        name = plot.name
+        try:
+            plot.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete Farm Plot '{name}': Active cultivation batches are linked to this plot.", status=400)
+        record_audit(
+            user=request.user,
+            model_name="FarmPlot",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Farm Plot '{name}'"
+        )
+        return json_success(message=f"Farm Plot '{name}' deleted successfully")

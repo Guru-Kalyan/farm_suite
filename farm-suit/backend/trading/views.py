@@ -2,7 +2,10 @@ import datetime
 from decimal import Decimal
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
-from django.db.models import Q, Sum, Count
+from django.db import transaction
+from django.db.models import Q, Sum, Count, ProtectedError
+from accounts.services.permission_service import has_permission
+from audit.services.audit_service import record_audit
 from django.http import HttpResponse
 from django.utils import timezone
 from utils.response import json_success, json_error
@@ -179,7 +182,7 @@ def purchases_view(request):
                 status=400
             )
 
-@require_http_methods(["GET", "PUT"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def purchase_detail_view(request, pk):
     try:
@@ -286,6 +289,52 @@ def purchase_detail_view(request, pk):
                 status=400
             )
 
+
+    elif request.method == "DELETE":
+        if not has_permission(request.user, "purchases.delete"):
+            return json_error("Forbidden: You do not have permission to delete purchase bills.", status=403)
+
+        if bill.status == 'POSTED':
+            if bill.amount_paid > Decimal('0.00'):
+                return json_error(f"Cannot delete purchase bill {bill.bill_number}: Active vendor payments amounting to ₹{bill.amount_paid} are recorded. Please delete payments first.", status=400)
+            # Verify inventory lots
+            for line in bill.lines.all():
+                for lot in line.inventory_lots.all():
+                    if lot.available_quantity < lot.original_quantity:
+                        return json_error(f"Cannot delete purchase bill {bill.bill_number}: Stock lot {lot.lot_number} has already been consumed in sales. Please resolve inventory first.", status=400)
+            # Reversal prior to delete
+            try:
+                reverse_purchase_bill(pk, request.user, reason="Auto-reversal before bill deletion")
+                bill.refresh_from_db()
+            except ValidationError as e:
+                msg = str(e.messages[0]) if hasattr(e, 'messages') and e.messages else str(e)
+                return json_error(f"Cannot delete: {msg}", status=400)
+
+        old_values = {
+            "bill_number": bill.bill_number,
+            "vendor": bill.vendor.vendor_name,
+            "grand_total": str(bill.grand_total),
+            "status": bill.status
+        }
+        b_num = bill.bill_number
+        try:
+            with transaction.atomic():
+                bill.lines.all().delete()
+                bill.delete()
+        except ProtectedError:
+            return json_error(f"Cannot delete purchase bill {b_num}: Protected relationships exist.", status=400)
+
+        record_audit(
+            user=request.user,
+            model_name="PurchaseBill",
+            object_id=pk,
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Purchase Bill '{b_num}'"
+        )
+        return json_success(message=f"Purchase bill '{b_num}' deleted successfully")
+
+
 @require_http_methods(["POST"])
 @api_login_required
 def post_purchase_view(request, pk):
@@ -304,7 +353,7 @@ def post_purchase_view(request, pk):
     except ValidationError as e:
         return json_error(message=str(e.messages[0]) if hasattr(e, 'messages') else str(e), status=400)
 
-@require_http_methods(["POST"])
+
 @api_login_required
 def reverse_purchase_view(request, pk):
     data = parse_json_body(request)
@@ -448,6 +497,54 @@ def all_vendor_payments_view(request):
 
 @require_http_methods(["GET"])
 @api_login_required
+@require_http_methods(["DELETE"])
+@api_login_required
+def vendor_payment_detail_view(request, pk):
+    if not has_permission(request.user, "purchases.delete"):
+        return json_error("Forbidden: You do not have permission to delete payments.", status=403)
+    try:
+        payment = VendorPayment.objects.select_related('purchase_bill', 'vendor').get(pk=pk)
+    except VendorPayment.DoesNotExist:
+        return json_error("Vendor payment record not found", status=404)
+
+    bill = payment.purchase_bill
+    pay_amt = payment.amount
+    pay_id = payment.id
+    old_values = {
+        "payment_date": str(payment.payment_date),
+        "amount": str(pay_amt),
+        "vendor": payment.vendor.vendor_name,
+        "bill_number": bill.bill_number if bill else ""
+    }
+
+    with transaction.atomic():
+        payment.delete()
+        if bill:
+            bill.amount_paid = max(Decimal('0.00'), bill.amount_paid - pay_amt)
+            if bill.amount_paid <= Decimal('0.00'):
+                bill.payment_status = 'PENDING'
+            elif bill.amount_paid < bill.grand_total:
+                bill.payment_status = 'PARTIAL'
+            else:
+                bill.payment_status = 'PAID'
+            bill.save(update_fields=['amount_paid', 'payment_status', 'updated_at'])
+
+        record_audit(
+            user=request.user,
+            model_name="VendorPayment",
+            object_id=str(pay_id),
+            action="DELETE",
+            old_values=old_values,
+            description=f"Deleted Vendor Payment of ₹{pay_amt} for Bill {bill.bill_number if bill else 'N/A'}"
+        )
+
+    return json_success({
+        "id": pay_id,
+        "bill_amount_paid": str(bill.amount_paid) if bill else "0.00",
+        "bill_payment_status": bill.payment_status if bill else ""
+    }, message="Vendor payment deleted successfully and bill balance updated.")
+
+
 def download_purchase_pdf_view(request, pk):
     """
     GET /api/purchases/<id>/pdf/

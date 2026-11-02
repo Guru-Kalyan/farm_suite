@@ -1,3 +1,4 @@
+import base64
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
@@ -16,6 +17,15 @@ from accounts.services.permission_service import (
 )
 
 
+def decode_password_if_encoded(val, is_encoded=False):
+    if not val or not is_encoded:
+        return val
+    try:
+        return base64.b64decode(val).decode('utf-8')
+    except Exception:
+        return val
+
+
 @require_http_methods(["GET"])
 def csrf_view(request):
     token = get_token(request)
@@ -29,7 +39,9 @@ def login_view(request):
         return json_error("Invalid JSON body", status=400)
 
     identifier = (data.get("username") or data.get("email") or "").strip()
-    password = data.get("password", "")
+    raw_password = data.get("password", "")
+    is_encoded = bool(data.get("is_encoded", False))
+    password = decode_password_if_encoded(raw_password, is_encoded)
     remember_me = bool(data.get("remember_me", False))
 
     if not identifier or not password:
@@ -123,9 +135,10 @@ def change_password_view(request):
     if not data:
         return json_error("Invalid JSON body", status=400)
 
-    current_password = data.get("current_password", "")
-    new_password = data.get("new_password", "")
-    confirm_password = data.get("confirm_password", "")
+    is_encoded = bool(data.get("is_encoded", False))
+    current_password = decode_password_if_encoded(data.get("current_password", ""), is_encoded)
+    new_password = decode_password_if_encoded(data.get("new_password", ""), is_encoded)
+    confirm_password = decode_password_if_encoded(data.get("confirm_password", ""), is_encoded)
 
     user = request.user
     profile, _ = UserProfile.objects.get_or_create(user=user)

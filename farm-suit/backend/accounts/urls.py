@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import ledger_views
+from . import expense_views
 
 urlpatterns = [
     path('csrf/', views.csrf_view, name='accounts-csrf'),
@@ -17,4 +18,8 @@ urlpatterns = [
     path('ledgers/vendors/<int:vendor_id>/', ledger_views.vendor_statement_view, name='ledger-vendor-statement'),
     path('ledgers/receivables/', ledger_views.receivables_prioritization_view, name='ledger-receivables'),
     path('ledgers/payables/', ledger_views.payables_prioritization_view, name='ledger-payables'),
+
+    # Expenditures
+    path('expenses/', expense_views.expenses_list_create_view, name='accounts-expenses-list-create'),
+    path('expenses/<int:pk>/', expense_views.expense_detail_view, name='accounts-expenses-detail'),
 ]

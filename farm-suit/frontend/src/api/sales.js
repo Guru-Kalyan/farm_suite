@@ -11,6 +11,7 @@ export const salesApi = {
   getSale: (id) => apiClient(`/api/sales/${id}/`),
   createSale: (data) => apiClient('/api/sales/', { method: 'POST', body: JSON.stringify(data) }),
   updateSale: (id, data) => apiClient(`/api/sales/${id}/`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSale: (id) => apiClient(`/api/sales/${id}/`, { method: 'DELETE' }),
   postSale: (id, items) => apiClient(`/api/sales/${id}/post/`, {
     method: 'POST',
     body: JSON.stringify({ items })
@@ -34,4 +35,5 @@ export const salesApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  deletePayment: (id) => apiClient(`/api/sales/payments/${id}/`, { method: 'DELETE' }),
 };
