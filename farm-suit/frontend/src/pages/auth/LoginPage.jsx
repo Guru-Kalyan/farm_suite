@@ -160,16 +160,6 @@ export const LoginPage = () => {
           </a>
         </div>
 
-        <div style={{
-          backgroundColor: 'var(--bg-surface-secondary)',
-          border: '1px solid var(--border-subtle)',
-          padding: '10px 12px',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '12px',
-          color: 'var(--text-secondary)'
-        }}>
-          💡 <b>Admin Demo:</b> User: <code style={{ color: 'var(--primary)', fontWeight: 'bold' }}>admin</code> | Pass: <code style={{ color: 'var(--primary)', fontWeight: 'bold' }}>admin123</code>
-        </div>
 
         <Button
           type="submit"
