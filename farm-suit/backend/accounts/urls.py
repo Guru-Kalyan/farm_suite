@@ -10,6 +10,8 @@ urlpatterns = [
     path('me/', views.me_view, name='accounts-me'),
     path('change-password/', views.change_password_view, name='accounts-change-password'),
     path('forgot-password/', views.forgot_password_view, name='accounts-forgot-password'),
+    path('verify-reset-key/', views.verify_reset_key_view, name='accounts-verify-reset-key'),
+    path('reset-password-with-key/', views.reset_password_with_key_view, name='accounts-reset-password-with-key'),
 
     # Wallets & Account Ledgers
     path('ledgers/customers/', ledger_views.customer_ledgers_list_view, name='ledger-customers-list'),

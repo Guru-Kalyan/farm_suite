@@ -1,5 +1,7 @@
+import datetime
 import secrets
 import string
+from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, ProtectedError
 from django.contrib.auth.models import User
@@ -9,7 +11,7 @@ from utils.decorators import admin_required, parse_json_body
 from masters.views import paginate_queryset
 from audit.models import AuditLog
 from audit.services.audit_service import record_audit
-from accounts.models import Role, Permission, RolePermission, UserProfile, UserPermission, SecuritySettings
+from accounts.models import Role, Permission, RolePermission, UserProfile, UserPermission, SecuritySettings, PasswordResetToken
 from accounts.services.permission_service import (
     get_user_effective_permissions,
     validate_admin_protection,
@@ -427,11 +429,52 @@ def admin_user_reset_password_view(request, user_id):
         ip_address=get_client_ip(request)
     )
 
+    PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+
     return json_success({
         "username": user.username,
         "temporary_password": new_password if generated else None,
         "force_password_change": force_change
     }, message=f"Password for user {user.username} has been reset successfully.")
+
+
+@require_http_methods(["POST"])
+@admin_required
+def admin_user_generate_reset_key_view(request, user_id):
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return json_error("User not found.", status=404)
+
+    # Invalidate previous unused tokens for this user
+    PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+
+    key_digits = f"{secrets.randbelow(900000) + 100000:06d}"
+    reset_key = f"FS-{key_digits}"
+    expires_at = timezone.now() + datetime.timedelta(hours=24)
+
+    token = PasswordResetToken.objects.create(
+        user=user,
+        reset_key=reset_key,
+        expires_at=expires_at,
+        created_by_admin=request.user,
+        ip_address=get_client_ip(request)
+    )
+
+    record_audit(
+        user=request.user,
+        model_name="User",
+        object_id=str(user.id),
+        action="UPDATE",
+        description=f"Admin {request.user.username} generated password reset key {reset_key} for user {user.username}",
+        ip_address=get_client_ip(request)
+    )
+
+    return json_success({
+        "username": user.username,
+        "reset_key": reset_key,
+        "expires_at": expires_at.isoformat()
+    }, message=f"One-time password reset key generated for {user.username}.")
+
 
 
 # ==============================================================================

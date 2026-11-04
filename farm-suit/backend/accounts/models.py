@@ -147,3 +147,25 @@ class Expense(models.Model):
 
     def __str__(self):
         return f"{self.expense_number} - {self.get_expense_type_display()} ({self.amount})"
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_tokens')
+    reset_key = models.CharField(max_length=64, db_index=True)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    created_by_admin = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='admin_issued_reset_tokens'
+    )
+    ip_address = models.CharField(max_length=45, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def is_valid(self):
+        return not self.is_used and timezone.now() < self.expires_at
+
+    def __str__(self):
+        status = "Active" if self.is_valid() else ("Used" if self.is_used else "Expired")
+        return f"ResetToken({self.user.username}, status={status})"

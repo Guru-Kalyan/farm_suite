@@ -1,12 +1,16 @@
 import base64
+import datetime
+import secrets
+from django.utils import timezone
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
 from django.views.decorators.http import require_http_methods
 from utils.response import json_success, json_error
 from utils.decorators import api_login_required, parse_json_body
+from utils.email_service import send_admin_reset_email
 from audit.services.audit_service import record_audit
-from accounts.models import UserProfile
+from accounts.models import UserProfile, PasswordResetToken
 from accounts.services.auth_service import (
     authenticate_user,
     validate_password_policy,
@@ -148,13 +152,19 @@ def change_password_view(request):
     if not data:
         return json_error("Invalid JSON body", status=400)
 
+    user = request.user
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    is_admin = user.is_superuser or (profile.role and profile.role.name == 'Admin')
+
+    # Restricted: Self-service change password is only allowed for Administrators,
+    # unless the user has an active force_password_change flag set by an admin reset.
+    if not is_admin and not profile.force_password_change:
+        return json_error("Permission denied. Self-service password changes are restricted to Administrators. Please contact an administrator to reset your password.", status=403)
+
     is_encoded = bool(data.get("is_encoded", False))
     current_password = decode_password_if_encoded(data.get("current_password", ""), is_encoded)
     new_password = decode_password_if_encoded(data.get("new_password", ""), is_encoded)
     confirm_password = decode_password_if_encoded(data.get("confirm_password", ""), is_encoded)
-
-    user = request.user
-    profile, _ = UserProfile.objects.get_or_create(user=user)
 
     # If force_password_change is true, current_password can be optional if admin reset it
     if not profile.force_password_change:
@@ -177,6 +187,9 @@ def change_password_view(request):
     profile.force_password_change = False
     profile.save()
 
+    # Invalidate any unused reset tokens for this user
+    PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+
     # Prevent user from being logged out after password change
     update_session_auth_hash(request, user)
 
@@ -197,18 +210,178 @@ def forgot_password_view(request):
     data = parse_json_body(request) or {}
     identifier = (data.get("identifier") or data.get("email") or data.get("username") or "").strip()
 
-    if identifier:
-        user = User.objects.filter(username__iexact=identifier).first() or User.objects.filter(email__iexact=identifier).first()
-        if user:
-            record_audit(
-                user=user,
-                model_name="User",
-                object_id=str(user.id),
-                action="UPDATE",
-                description=f"Forgot password request initiated for {user.username}",
-                ip_address=get_client_ip(request)
-            )
+    if not identifier:
+        return json_error("Please enter your username or registered email address.", status=400)
+
+    user = User.objects.filter(username__iexact=identifier).first() or User.objects.filter(email__iexact=identifier).first()
+
+    if not user:
+        return json_success(
+            data={"exists": False},
+            message="If an account matches that username or email, recovery instructions have been initiated."
+        )
+
+    ip = get_client_ip(request)
+    is_admin = user.is_superuser or (hasattr(user, 'profile') and user.profile.role and user.profile.role.name == 'Admin')
+
+    if is_admin:
+        # Generate 6-digit cryptographic PIN for Admin
+        reset_key = f"{secrets.randbelow(900000) + 100000:06d}"
+
+        # Invalidate previous unused tokens for this user
+        PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+
+        # Create 15-minute token
+        PasswordResetToken.objects.create(
+            user=user,
+            reset_key=reset_key,
+            expires_at=timezone.now() + datetime.timedelta(minutes=15),
+            created_by_admin=None,
+            ip_address=ip
+        )
+
+        target_email = user.email.strip() if user.email else "gurukalyan786@gmail.com"
+        email_sent, err_msg = send_admin_reset_email(
+            recipient_email=target_email,
+            reset_key=reset_key,
+            admin_username=user.first_name or user.username,
+            expires_minutes=15
+        )
+
+        # Mask email for privacy
+        parts = target_email.split('@')
+        masked_email = f"{parts[0][0]}***{parts[0][-1]}@{parts[1]}" if len(parts) == 2 and len(parts[0]) > 2 else target_email
+
+        record_audit(
+            user=user,
+            model_name="User",
+            object_id=str(user.id),
+            action="UPDATE",
+            description=f"Admin password reset key sent via SMTP to {target_email} (success: {email_sent})",
+            ip_address=ip
+        )
+
+        if not email_sent:
+            return json_error(f"Failed to send reset email: {err_msg}", status=500)
+
+        return json_success(
+            data={
+                "is_admin": True,
+                "username": user.username,
+                "masked_email": masked_email
+            },
+            message=f"A 6-digit password reset key has been sent to your registered email ({masked_email}). Please check your inbox."
+        )
+    else:
+        # Regular staff user: Password reset key must be generated by Admin
+        record_audit(
+            user=user,
+            model_name="User",
+            object_id=str(user.id),
+            action="UPDATE",
+            description=f"Staff user {user.username} initiated password reset request. Requires Admin key generation.",
+            ip_address=ip
+        )
+
+        return json_success(
+            data={
+                "is_admin": False,
+                "username": user.username
+            },
+            message="Password reset request submitted. Normal staff user passwords must be reset or authorized by the Administrator. Please contact your Farm Suit Administrator to obtain your reset key."
+        )
+
+
+@require_http_methods(["POST"])
+def verify_reset_key_view(request):
+    data = parse_json_body(request) or {}
+    identifier = (data.get("identifier") or data.get("username") or "").strip()
+    reset_key = (data.get("reset_key") or data.get("key") or "").strip()
+
+    if not identifier or not reset_key:
+        return json_error("Identifier and reset key are required.", status=400)
+
+    user = User.objects.filter(username__iexact=identifier).first() or User.objects.filter(email__iexact=identifier).first()
+    if not user:
+        return json_error("Invalid user or reset key.", status=400)
+
+    token = PasswordResetToken.objects.filter(
+        user=user,
+        reset_key=reset_key,
+        is_used=False,
+        expires_at__gt=timezone.now()
+    ).first()
+
+    if not token:
+        return json_error("Invalid or expired password reset key.", status=400)
 
     return json_success(
-        message="Password reset request received. Please contact your Farm Suit system administrator to receive a temporary reset password."
+        data={"username": user.username, "is_valid": True},
+        message="Reset key is valid."
     )
+
+
+@require_http_methods(["POST"])
+def reset_password_with_key_view(request):
+    data = parse_json_body(request) or {}
+    identifier = (data.get("identifier") or data.get("username") or "").strip()
+    reset_key = (data.get("reset_key") or data.get("key") or "").strip()
+    is_encoded = bool(data.get("is_encoded", False))
+    new_password = decode_password_if_encoded(data.get("new_password", ""), is_encoded).strip()
+    confirm_password = decode_password_if_encoded(data.get("confirm_password", ""), is_encoded).strip()
+
+    if not identifier or not reset_key:
+        return json_error("Identifier and reset key are required.", status=400)
+
+    if not new_password:
+        return json_error("New password is required.", status=400)
+
+    if new_password != confirm_password:
+        return json_error("New password and confirm password do not match.", status=400)
+
+    user = User.objects.filter(username__iexact=identifier).first() or User.objects.filter(email__iexact=identifier).first()
+    if not user:
+        return json_error("User not found.", status=404)
+
+    token = PasswordResetToken.objects.filter(
+        user=user,
+        reset_key=reset_key,
+        is_used=False,
+        expires_at__gt=timezone.now()
+    ).first()
+
+    if not token:
+        return json_error("The password reset key is invalid or has expired. Please request a new one.", status=400)
+
+    is_valid, err_msg = validate_password_policy(new_password)
+    if not is_valid:
+        return json_error(err_msg, status=400)
+
+    # Update password
+    user.set_password(new_password)
+    user.save()
+
+    # Clear lockout and force change flag
+    if hasattr(user, 'profile'):
+        user.profile.force_password_change = False
+        user.profile.failed_login_attempts = 0
+        user.profile.locked_until = None
+        user.profile.save()
+
+    # Mark token used & invalidate all tokens for user
+    token.is_used = True
+    token.save()
+    PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+
+    ip = get_client_ip(request)
+    record_audit(
+        user=user,
+        model_name="User",
+        object_id=str(user.id),
+        action="PASSWORD_RESET",
+        description=f"Password successfully reset via recovery key for user {user.username}",
+        ip_address=ip
+    )
+
+    return json_success(message="Password reset successfully! You can now sign in with your new password.")
+
