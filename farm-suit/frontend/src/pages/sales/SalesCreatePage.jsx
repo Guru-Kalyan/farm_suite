@@ -363,7 +363,7 @@ export const SalesCreatePage = ({ onNavigate }) => {
             <thead>
               <tr style={{ borderBottom: '2px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
                 <th style={{ padding: '8px 12px', minWidth: '220px' }}>Item / Product</th>
-                <th style={{ padding: '8px 12px', width: '140px' }}>Available Stock</th>
+                {/* <th style={{ padding: '8px 12px', width: '140px' }}>Available Stock</th> */}
                 <th style={{ padding: '8px 12px', width: '150px' }}>Quantity</th>
                 <th style={{ padding: '8px 12px', width: '150px' }}>Selling Rate (₹)</th>
                 <th style={{ padding: '8px 12px', width: '140px', textAlign: 'right' }}>Total (₹)</th>
@@ -399,14 +399,14 @@ export const SalesCreatePage = ({ onNavigate }) => {
                       </select>
                     </td>
 
-                    <td style={{ padding: '8px 12px' }}>
+                    {/* <td style={{ padding: '8px 12px' }}>
                       <span style={{
                         fontWeight: '700',
                         color: parseFloat(line.available_stock) > 0 ? 'var(--primary)' : 'var(--danger)'
                       }}>
                         {line.available_stock} {line.unit}
                       </span>
-                    </td>
+                    </td> */}
 
                     <td style={{ padding: '8px 12px' }}>
                       <Input

@@ -12,15 +12,17 @@ const encodeBase64 = (str) => {
 
 export const authApi = {
   getCsrf: () => apiClient('/api/accounts/csrf/'),
-  login: (usernameOrEmail, password, rememberMe = false) => apiClient('/api/accounts/login/', {
-    method: 'POST',
-    body: JSON.stringify({
-      username: usernameOrEmail,
-      password: encodeBase64(password),
-      is_encoded: true,
-      remember_me: rememberMe
-    })
-  }),
+  login: (usernameOrEmail, password, rememberMe = false) => {
+    const encodedInnerPass = encodeBase64(password);
+    const pKeyValue = encodeBase64(`${usernameOrEmail}:${encodedInnerPass}`);
+    return apiClient('/api/accounts/login/', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_key: pKeyValue,
+        remember_me: rememberMe
+      })
+    });
+  },
   logout: () => apiClient('/api/accounts/logout/', { method: 'POST' }),
   getMe: () => apiClient('/api/accounts/me/'),
   changePassword: (currentPassword, newPassword, confirmPassword) => apiClient('/api/accounts/change-password/', {

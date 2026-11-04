@@ -38,10 +38,23 @@ def login_view(request):
     if data is None:
         return json_error("Invalid JSON body", status=400)
 
-    identifier = (data.get("username") or data.get("email") or "").strip()
-    raw_password = data.get("password", "")
-    is_encoded = bool(data.get("is_encoded", False))
-    password = decode_password_if_encoded(raw_password, is_encoded)
+    # 1. Check for single-key p_key payload: encodeBase64(username:encodeBase64(password))
+    raw_p_key = data.get("p_key")
+    if raw_p_key:
+        try:
+            decoded_combined = base64.b64decode(raw_p_key).decode('utf-8')
+            identifier, encoded_pass = decoded_combined.split(':', 1)
+            identifier = identifier.strip()
+            password = base64.b64decode(encoded_pass).decode('utf-8')
+        except Exception:
+            return json_error("Invalid p_key payload format", status=400)
+    else:
+        # Fallback to standard username/password for backwards compatibility
+        identifier = (data.get("username") or data.get("email") or "").strip()
+        raw_password = data.get("password", "")
+        is_encoded = bool(data.get("is_encoded", False))
+        password = decode_password_if_encoded(raw_password, is_encoded)
+
     remember_me = bool(data.get("remember_me", False))
 
     if not identifier or not password:
