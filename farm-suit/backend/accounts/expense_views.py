@@ -88,6 +88,7 @@ def expenses_list_create_view(request):
             'MEDICINE': str(qs.filter(expense_type='MEDICINE').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
             'TOOLS': str(qs.filter(expense_type='TOOLS').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
             'TRANSPORT': str(qs.filter(expense_type='TRANSPORT').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+            'FUEL': str(qs.filter(expense_type='FUEL').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
         }
 
         # Pagination

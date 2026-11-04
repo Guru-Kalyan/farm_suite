@@ -17,6 +17,7 @@ const EXPENSE_TYPES = [
   { value: 'MEDICINE', label: 'Medicine Expenses' },
   { value: 'TOOLS', label: 'Tools Expenses' },
   { value: 'TRANSPORT', label: 'Transport Expenses' },
+  { value: 'FUEL', label: 'Fuel Expenses' },
 ];
 
 const CATEGORY_COLORS = {
@@ -25,6 +26,7 @@ const CATEGORY_COLORS = {
   MEDICINE: { bg: 'rgba(16, 185, 129, 0.12)', text: '#059669', border: 'rgba(16, 185, 129, 0.3)' },
   TOOLS: { bg: 'rgba(139, 92, 246, 0.12)', text: '#7c3aed', border: 'rgba(139, 92, 246, 0.3)' },
   TRANSPORT: { bg: 'rgba(236, 72, 153, 0.12)', text: '#db2777', border: 'rgba(236, 72, 153, 0.3)' },
+  FUEL: { bg: 'rgba(249, 115, 22, 0.12)', text: '#ea580c', border: 'rgba(249, 115, 22, 0.3)' },
 };
 
 export const ExpenseHistoryPage = ({ onNavigate }) => {
@@ -35,7 +37,7 @@ export const ExpenseHistoryPage = ({ onNavigate }) => {
   const [summary, setSummary] = useState({
     total_amount: '0.00',
     total_count: 0,
-    category_breakdown: { DEPARTMENT: '0.00', LABOUR: '0.00', MEDICINE: '0.00', TOOLS: '0.00', TRANSPORT: '0.00' }
+    category_breakdown: { DEPARTMENT: '0.00', LABOUR: '0.00', MEDICINE: '0.00', TOOLS: '0.00', TRANSPORT: '0.00', FUEL: '0.00' }
   });
   const [loading, setLoading] = useState(false);
 
@@ -300,6 +302,11 @@ export const ExpenseHistoryPage = ({ onNavigate }) => {
           title="Transport Expenses"
           value={formatCurrency(summary.category_breakdown?.TRANSPORT || '0')}
           icon="🚚"
+        />
+        <KpiCard
+          title="Fuel Expenses"
+          value={formatCurrency(summary.category_breakdown?.FUEL || '0')}
+          icon="⛽"
         />
       </div>
 

@@ -11,6 +11,7 @@ const EXPENSE_TYPES = [
   { value: 'MEDICINE', label: 'Medicine Expenses' },
   { value: 'TOOLS', label: 'Tools Expenses' },
   { value: 'TRANSPORT', label: 'Transport Expenses' },
+  { value: 'FUEL', label: 'Fuel Expenses' },
 ];
 
 const PAYMENT_MODES = [

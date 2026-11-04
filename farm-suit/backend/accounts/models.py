@@ -54,8 +54,6 @@ class UserProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def is_locked(self):
-        if self.locked_until and self.locked_until > timezone.now():
-            return True
         return False
 
     def __str__(self):
@@ -118,6 +116,7 @@ class Expense(models.Model):
         ('MEDICINE', 'Medicine Expenses'),
         ('TOOLS', 'Tools Expenses'),
         ('TRANSPORT', 'Transport Expenses'),
+        ('FUEL', 'Fuel Expenses'),
     ]
 
     PAYMENT_MODE_CHOICES = [

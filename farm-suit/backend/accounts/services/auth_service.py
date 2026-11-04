@@ -75,19 +75,6 @@ def authenticate_user(request, identifier, password):
     profile, _ = UserProfile.objects.get_or_create(user=user)
     settings = SecuritySettings.get_settings()
 
-    # Check lockout
-    if profile.is_locked():
-        remaining = int((profile.locked_until - timezone.now()).total_seconds() / 60) + 1
-        record_audit(
-            user=user,
-            model_name="User",
-            object_id=str(user.id),
-            action="FAILED_LOGIN",
-            description=f"Attempted login to locked account: {user.username}",
-            ip_address=ip_addr
-        )
-        return None, f"Account is temporarily locked due to excessive failed attempts. Try again in {remaining} minute(s).", True
-
     # Check active status
     if not user.is_active:
         record_audit(
@@ -104,27 +91,15 @@ def authenticate_user(request, identifier, password):
     authenticated_user = authenticate(request, username=user.username, password=password)
 
     if not authenticated_user:
-        profile.failed_login_attempts += 1
-        now = timezone.now()
-        locked = False
-        msg = "Invalid username/email or password."
-
-        if profile.failed_login_attempts >= settings.max_login_attempts:
-            profile.locked_until = now + timedelta(minutes=settings.lockout_duration_minutes)
-            locked = True
-            msg = f"Account locked for {settings.lockout_duration_minutes} minutes due to {settings.max_login_attempts} failed login attempts."
-        
-        profile.save()
-
         record_audit(
             user=user,
             model_name="User",
             object_id=str(user.id),
             action="FAILED_LOGIN",
-            description=f"Failed login attempt #{profile.failed_login_attempts} for user: {user.username}",
+            description=f"Failed login attempt for user: {user.username}",
             ip_address=ip_addr
         )
-        return None, msg, locked
+        return None, "Invalid username/email or password.", False
 
     # Successful login: reset failed counters and update last login ip
     profile.failed_login_attempts = 0
