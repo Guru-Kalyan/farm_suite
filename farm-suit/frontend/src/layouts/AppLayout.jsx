@@ -336,7 +336,8 @@ export const AppLayout = ({
             </div>
           )}
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button
+            {user?.is_admin && (
+              <button
               onClick={() => setPwdModalOpen(true)}
               title="Change Password"
               style={{
@@ -351,6 +352,7 @@ export const AppLayout = ({
             >
               🔑
             </button>
+            )}
             <button
               onClick={logout}
               title="Sign out of Farm Suit"
@@ -420,7 +422,7 @@ export const AppLayout = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <ThemeToggle />
             <div
-              onClick={() => setPwdModalOpen(true)}
+              onClick={user?.is_admin ? () => setPwdModalOpen(true) : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -429,9 +431,9 @@ export const AppLayout = ({
                 backgroundColor: 'var(--bg-surface-secondary)',
                 borderRadius: 'var(--radius-full)',
                 border: '1px solid var(--border-subtle)',
-                cursor: 'pointer'
+                cursor: user?.is_admin ? 'pointer' : 'default'
               }}
-              title="Click to view user settings / change password"
+              title={user?.is_admin ? "Click to change administrator password" : (user?.username || 'User')}
             >
               <span style={{ fontSize: '12px' }}>👤</span>
               <span style={{ fontSize: '12.5px', fontWeight: '600' }}>{user?.username}</span>

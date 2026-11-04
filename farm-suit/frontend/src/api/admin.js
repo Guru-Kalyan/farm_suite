@@ -28,6 +28,9 @@ export const adminApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  generateResetKey: (id) => apiClient(`/api/admin/users/${id}/generate-reset-key/`, {
+    method: 'POST'
+  }),
 
   // Roles
   getRoles: () => apiClient('/api/admin/roles/'),

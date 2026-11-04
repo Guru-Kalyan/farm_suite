@@ -37,5 +37,19 @@ export const authApi = {
   forgotPassword: (identifier) => apiClient('/api/accounts/forgot-password/', {
     method: 'POST',
     body: JSON.stringify({ identifier })
+  }),
+  verifyResetKey: (identifier, resetKey) => apiClient('/api/accounts/verify-reset-key/', {
+    method: 'POST',
+    body: JSON.stringify({ identifier, reset_key: resetKey })
+  }),
+  resetPasswordWithKey: (identifier, resetKey, newPassword, confirmPassword) => apiClient('/api/accounts/reset-password-with-key/', {
+    method: 'POST',
+    body: JSON.stringify({
+      identifier,
+      reset_key: resetKey,
+      new_password: encodeBase64(newPassword),
+      confirm_password: encodeBase64(confirmPassword),
+      is_encoded: true
+    })
   })
 };
