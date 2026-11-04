@@ -31,6 +31,7 @@ export const adminApi = {
   generateResetKey: (id) => apiClient(`/api/admin/users/${id}/generate-reset-key/`, {
     method: 'POST'
   }),
+  getResetRequests: () => apiClient('/api/admin/reset-requests/'),
 
   // Roles
   getRoles: () => apiClient('/api/admin/roles/'),

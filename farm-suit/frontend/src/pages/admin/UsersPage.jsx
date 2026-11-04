@@ -20,6 +20,7 @@ export const UsersPage = ({ onNavigate }) => {
 
   // Filters
   const [search, setSearch] = useState('');
+  const pendingResetCount = users.filter(u => u.has_pending_reset_request).length;
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -305,8 +306,20 @@ export const UsersPage = ({ onNavigate }) => {
                           >
                             {u.full_name || u.username}
                           </div>
-                          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                            @{u.username} {u.employee_id ? `• ${u.employee_id}` : ''}
+                          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>@{u.username} {u.employee_id ? `• ${u.employee_id}` : ''}</span>
+                            {u.has_pending_reset_request && (
+                              <span style={{
+                                backgroundColor: 'var(--danger)',
+                                color: '#ffffff',
+                                fontSize: '10px',
+                                fontWeight: '700',
+                                padding: '1px 5px',
+                                borderRadius: 'var(--radius-full)'
+                              }}>
+                                🔔 Reset Requested
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -382,16 +395,17 @@ export const UsersPage = ({ onNavigate }) => {
                           type="button"
                           onClick={() => setResetTargetUser(u)}
                           style={{
-                            background: 'none',
-                            border: '1px solid var(--border-subtle)',
+                            background: u.has_pending_reset_request ? 'var(--primary)' : 'none',
+                            border: '1px solid var(--primary)',
                             borderRadius: 'var(--radius-xs)',
                             padding: '4px 8px',
                             fontSize: '11.5px',
+                            fontWeight: u.has_pending_reset_request ? '700' : '500',
                             cursor: 'pointer',
-                            color: 'var(--primary)'
+                            color: u.has_pending_reset_request ? '#ffffff' : 'var(--primary)'
                           }}
                         >
-                          Reset Pwd
+                          {u.has_pending_reset_request ? '⚡ Reset Pwd' : 'Reset Pwd'}
                         </button>
 
                         <button

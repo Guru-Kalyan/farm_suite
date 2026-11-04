@@ -7,6 +7,7 @@ import { ForcePasswordChangeModal } from '../components/common/ForcePasswordChan
 import { Modal } from '../components/common/Modal';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
+import { adminApi } from '../api/admin';
 
 export const AppLayout = ({
   children,
@@ -29,6 +30,23 @@ export const AppLayout = ({
   const [confirmPwd, setConfirmPwd] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState('');
+  const [pendingResetCount, setPendingResetCount] = useState(0);
+
+  useEffect(() => {
+    if (user?.is_admin) {
+      const fetchResetRequests = async () => {
+        try {
+          const res = await adminApi.getResetRequests();
+          if (res?.data) {
+            setPendingResetCount(res.data.count || 0);
+          }
+        } catch (_) {}
+      };
+      fetchResetRequests();
+      const interval = setInterval(fetchResetRequests, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user?.is_admin]);
 
   const activeAuditTarget = propAuditTarget !== undefined ? propAuditTarget : internalAuditTarget;
   const handleCloseAudit = propCloseAudit || (() => setInternalAuditTarget(null));
@@ -336,8 +354,7 @@ export const AppLayout = ({
             </div>
           )}
           <div style={{ display: 'flex', gap: '4px' }}>
-            {user?.is_admin && (
-              <button
+            <button
               onClick={() => setPwdModalOpen(true)}
               title="Change Password"
               style={{
@@ -352,7 +369,6 @@ export const AppLayout = ({
             >
               🔑
             </button>
-            )}
             <button
               onClick={logout}
               title="Sign out of Farm Suit"
@@ -420,9 +436,44 @@ export const AppLayout = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {user?.is_admin && (
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('/admin/users')}
+                title={pendingResetCount > 0 ? `${pendingResetCount} pending password reset request(s)` : "Password Reset Requests (None pending)"}
+                style={{
+                  position: 'relative',
+                  background: 'var(--bg-surface-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-full)',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: pendingResetCount > 0 ? 'var(--warning-text)' : 'var(--text-muted)',
+                  fontSize: '13px'
+                }}
+              >
+                <span>🔔</span>
+                {pendingResetCount > 0 && (
+                  <span style={{
+                    backgroundColor: 'var(--danger)',
+                    color: '#fff',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '10.5px',
+                    fontWeight: '800',
+                    padding: '1px 6px',
+                    lineHeight: '1.2'
+                  }}>
+                    {pendingResetCount}
+                  </span>
+                )}
+              </button>
+            )}
             <ThemeToggle />
             <div
-              onClick={user?.is_admin ? () => setPwdModalOpen(true) : undefined}
+              onClick={() => setPwdModalOpen(true)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -431,9 +482,9 @@ export const AppLayout = ({
                 backgroundColor: 'var(--bg-surface-secondary)',
                 borderRadius: 'var(--radius-full)',
                 border: '1px solid var(--border-subtle)',
-                cursor: user?.is_admin ? 'pointer' : 'default'
+                cursor: 'pointer'
               }}
-              title={user?.is_admin ? "Click to change administrator password" : (user?.username || 'User')}
+              title="Click to change account password"
             >
               <span style={{ fontSize: '12px' }}>👤</span>
               <span style={{ fontSize: '12.5px', fontWeight: '600' }}>{user?.username}</span>

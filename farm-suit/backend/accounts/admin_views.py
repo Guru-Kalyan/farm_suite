@@ -11,7 +11,7 @@ from utils.decorators import admin_required, parse_json_body
 from masters.views import paginate_queryset
 from audit.models import AuditLog
 from audit.services.audit_service import record_audit
-from accounts.models import Role, Permission, RolePermission, UserProfile, UserPermission, SecuritySettings, PasswordResetToken
+from accounts.models import Role, Permission, RolePermission, UserProfile, UserPermission, SecuritySettings, PasswordResetToken, PasswordResetRequest
 from accounts.services.permission_service import (
     get_user_effective_permissions,
     validate_admin_protection,
@@ -49,6 +49,7 @@ def _serialize_user_summary(u):
         "phone": profile.phone if profile else "",
         "last_login": u.last_login.strftime('%Y-%m-%d %H:%M:%S') if u.last_login else None,
         "date_joined": u.date_joined.strftime('%Y-%m-%d %H:%M:%S') if u.date_joined else None,
+        "has_pending_reset_request": PasswordResetRequest.objects.filter(user=u, status='PENDING').exists(),
     }
 
 
@@ -430,12 +431,47 @@ def admin_user_reset_password_view(request, user_id):
     )
 
     PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+    PasswordResetRequest.objects.filter(user=user, status='PENDING').update(
+        status='RESOLVED', resolved_at=timezone.now(), resolved_by=request.user
+    )
 
     return json_success({
         "username": user.username,
         "temporary_password": new_password if generated else None,
         "force_password_change": force_change
     }, message=f"Password for user {user.username} has been reset successfully.")
+
+
+@require_http_methods(["GET"])
+@admin_required
+def admin_reset_requests_view(request):
+    """
+    Returns pending password reset requests from staff members for Admin notification.
+    """
+    pending = PasswordResetRequest.objects.filter(status='PENDING').select_related(
+        'user', 'user__profile', 'user__profile__role'
+    ).order_by('-requested_at')
+
+    data = []
+    for r in pending:
+        u = r.user
+        profile = getattr(u, 'profile', None)
+        data.append({
+            "id": r.id,
+            "user_id": u.id,
+            "username": u.username,
+            "full_name": u.get_full_name() or u.username,
+            "email": u.email or "",
+            "phone": profile.phone if profile else "",
+            "role": profile.role.name if profile and profile.role else "No Role",
+            "requested_at": r.requested_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "ip_address": r.ip_address
+        })
+
+    return json_success({
+        "count": len(data),
+        "requests": data
+    }, message="Pending password reset requests retrieved.")
 
 
 @require_http_methods(["POST"])
@@ -447,6 +483,9 @@ def admin_user_generate_reset_key_view(request, user_id):
 
     # Invalidate previous unused tokens for this user
     PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+    PasswordResetRequest.objects.filter(user=user, status='PENDING').update(
+        status='RESOLVED', resolved_at=timezone.now(), resolved_by=request.user
+    )
 
     key_digits = f"{secrets.randbelow(900000) + 100000:06d}"
     reset_key = f"FS-{key_digits}"

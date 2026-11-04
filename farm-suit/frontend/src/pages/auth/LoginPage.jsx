@@ -18,7 +18,7 @@ export const LoginPage = () => {
 
   // Account Recovery Modal State
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState(1); // 1: Request, 2: Key & Password, 3: Success
+  const [recoveryStep, setRecoveryStep] = useState(1); // 1: Request, 2: Admin Key & Password, 3: Staff Request Sent, 4: Admin Success
   const [forgotInput, setForgotInput] = useState('');
   const [resetKey, setResetKey] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -27,8 +27,8 @@ export const LoginPage = () => {
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
   const [recoveryNotice, setRecoveryNotice] = useState('');
-  const [staffNotice, setStaffNotice] = useState('');
-  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [staffSuccessMessage, setStaffSuccessMessage] = useState('');
+  const [adminSuccessMessage, setAdminSuccessMessage] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,13 +59,13 @@ export const LoginPage = () => {
     setConfirmNewPassword('');
     setRecoveryError('');
     setRecoveryNotice('');
-    setStaffNotice('');
-    setForgotSuccess('');
+    setStaffSuccessMessage('');
+    setAdminSuccessMessage('');
     setRecoveryStep(1);
     setForgotModalOpen(true);
   };
 
-  const handleRequestResetKey = async (e) => {
+  const handleRequestReset = async (e) => {
     e.preventDefault();
     if (!forgotInput.trim()) {
       setRecoveryError('Please enter your username or registered email address.');
@@ -75,19 +75,21 @@ export const LoginPage = () => {
     try {
       setRecoveryLoading(true);
       setRecoveryError('');
-      setStaffNotice('');
-      setRecoveryNotice('');
 
       const res = await authApi.forgotPassword(forgotInput.trim());
 
       if (res?.data?.is_admin) {
-        // Admin user: SMTP email was sent
+        // Admin Account: 6-digit key sent to admin email from gurukalyan786@gmail.com
         setRecoveryNotice(res.message || 'A 6-digit password reset key has been sent to your registered email address.');
-        addToast('Verification code dispatched to your email!', 'success');
+        addToast('Verification key dispatched to your email!', 'success');
         setRecoveryStep(2);
       } else {
-        // Regular staff user: Must obtain key from administrator
-        setStaffNotice(res.message || 'Password reset request submitted. Please obtain your reset key from your Farm Suit System Administrator.');
+        // Staff Account: Send request to Admin user
+        setStaffSuccessMessage(
+          res.message || 'Your password reset request has been sent to the Administrator. The Administrator will reset your account password directly.'
+        );
+        addToast('Reset request sent to Administrator.', 'info');
+        setRecoveryStep(3);
       }
     } catch (err) {
       setRecoveryError(err.message || 'Failed to process password recovery request.');
@@ -96,14 +98,14 @@ export const LoginPage = () => {
     }
   };
 
-  const handleConfirmReset = async (e) => {
+  const handleAdminConfirmReset = async (e) => {
     e.preventDefault();
     if (!forgotInput.trim()) {
       setRecoveryError('Username or email is required.');
       return;
     }
     if (!resetKey.trim()) {
-      setRecoveryError('Please enter the password reset key.');
+      setRecoveryError('Please enter the 6-digit password reset key.');
       return;
     }
     if (!newPassword) {
@@ -126,13 +128,13 @@ export const LoginPage = () => {
         confirmNewPassword
       );
 
-      setForgotSuccess(res?.message || 'Password successfully reset! You can now log in.');
+      setAdminSuccessMessage(res?.message || 'Password successfully reset! You can now log in.');
       addToast('Password reset successfully!', 'success');
       setIdentifier(forgotInput.trim());
       setPassword(newPassword);
-      setRecoveryStep(3);
+      setRecoveryStep(4);
     } catch (err) {
-      setRecoveryError(err.message || 'Failed to reset password. Please check your key.');
+      setRecoveryError(err.message || 'Failed to reset password. Please verify the reset key.');
     } finally {
       setRecoveryLoading(false);
     }
@@ -260,7 +262,7 @@ export const LoginPage = () => {
         </Button>
       </form>
 
-      {/* Forgot Password / Recovery Modal */}
+      {/* Forgot Password / Account Recovery Modal */}
       {forgotModalOpen && (
         <Modal
           isOpen={forgotModalOpen}
@@ -269,7 +271,9 @@ export const LoginPage = () => {
             recoveryStep === 1
               ? "Account Password Recovery"
               : recoveryStep === 2
-              ? "Enter Reset Key & New Password"
+              ? "Administrator Password Reset"
+              : recoveryStep === 3
+              ? "Reset Request Submitted"
               : "Password Reset Complete"
           }
           maxWidth="460px"
@@ -288,74 +292,37 @@ export const LoginPage = () => {
             </div>
           )}
 
-          {/* STEP 1: REQUEST KEY */}
+          {/* STEP 1: ENTER USERNAME/EMAIL & TWO BUTTONS: [Cancel] & [Password Reset] */}
           {recoveryStep === 1 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleRequestReset} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
-                Enter your username or registered email. If you are an <b>Administrator</b>, a 6-digit key will be emailed to you from <code>gurukalyan786@gmail.com</code> via SMTP. If you are a staff member, your request will be registered for your administrator.
+                Enter your username or registered email address to initiate password recovery.
               </p>
 
-              {staffNotice && (
-                <div style={{
-                  padding: '12px 14px',
-                  backgroundColor: 'var(--warning-subtle)',
-                  border: '1px solid var(--warning)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--warning-text)',
-                  fontSize: '12.5px',
-                  lineHeight: '1.5'
-                }}>
-                  📢 {staffNotice}
-                </div>
-              )}
+              <Input
+                label="Username or Email"
+                required
+                value={forgotInput}
+                onChange={(e) => setForgotInput(e.target.value)}
+                placeholder="e.g. admin or staff_username"
+                disabled={recoveryLoading}
+                autoFocus
+              />
 
-              <form onSubmit={handleRequestResetKey} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <Input
-                  label="Username or Email"
-                  required
-                  value={forgotInput}
-                  onChange={(e) => setForgotInput(e.target.value)}
-                  placeholder="e.g. admin or rahul@example.com"
-                  disabled={recoveryLoading}
-                  autoFocus
-                />
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecoveryStep(2);
-                      setRecoveryError('');
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--primary)',
-                      fontSize: '12.5px',
-                      cursor: 'pointer',
-                      padding: 0,
-                      textDecoration: 'underline'
-                    }}
-                  >
-                    I already have a reset key &rarr;
-                  </button>
-
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <Button variant="secondary" onClick={handleCloseModal} disabled={recoveryLoading}>
-                      Cancel
-                    </Button>
-                    <Button variant="primary" type="submit" loading={recoveryLoading}>
-                      Send Reset Key
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                <Button variant="secondary" onClick={handleCloseModal} disabled={recoveryLoading}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" loading={recoveryLoading}>
+                  Password Reset
+                </Button>
+              </div>
+            </form>
           )}
 
-          {/* STEP 2: ENTER KEY & SET PASSWORD */}
+          {/* STEP 2: ADMIN ONLY - ENTER 6-DIGIT KEY & NEW PASSWORD */}
           {recoveryStep === 2 && (
-            <form onSubmit={handleConfirmReset} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleAdminConfirmReset} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {recoveryNotice && (
                 <div style={{
                   padding: '12px 14px',
@@ -375,16 +342,16 @@ export const LoginPage = () => {
                 required
                 value={forgotInput}
                 onChange={(e) => setForgotInput(e.target.value)}
-                placeholder="Enter your username or email"
+                placeholder="Enter administrator username or email"
                 disabled={recoveryLoading}
               />
 
               <Input
-                label="Password Reset Key / PIN"
+                label="6-Digit Reset Key / PIN"
                 required
                 value={resetKey}
                 onChange={(e) => setResetKey(e.target.value)}
-                placeholder="e.g. 123456 or FS-123456"
+                placeholder="e.g. 123456"
                 disabled={recoveryLoading}
                 autoFocus
               />
@@ -453,8 +420,31 @@ export const LoginPage = () => {
             </form>
           )}
 
-          {/* STEP 3: SUCCESS */}
+          {/* STEP 3: STAFF USER - REQUEST SENT CONFIRMATION */}
           {recoveryStep === 3 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                padding: '14px',
+                backgroundColor: 'var(--success-subtle)',
+                border: '1px solid var(--success)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--success-text)',
+                fontSize: '13px',
+                lineHeight: '1.5'
+              }}>
+                ✓ {staffSuccessMessage}
+              </div>
+              <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Your administrator has been notified. The administrator will reset your account password and provide you with your access credentials.
+              </p>
+              <Button variant="primary" onClick={handleCloseModal}>
+                Back to Login
+              </Button>
+            </div>
+          )}
+
+          {/* STEP 4: ADMIN SUCCESS */}
+          {recoveryStep === 4 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{
                 padding: '14px',
@@ -465,10 +455,10 @@ export const LoginPage = () => {
                 fontSize: '13px',
                 lineHeight: '1.5'
               }}>
-                ✓ {forgotSuccess}
+                ✓ {adminSuccessMessage}
               </div>
               <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                Your password has been securely updated. You can now proceed to log in with your new credentials.
+                Your administrator password has been securely updated. You can now log in with your new credentials.
               </p>
               <Button variant="primary" onClick={handleCloseModal}>
                 Proceed to Login

@@ -9,6 +9,7 @@ urlpatterns = [
     path('users/<int:user_id>/enable/', admin_views.admin_user_enable_view, name='admin-user-enable'),
     path('users/<int:user_id>/reset-password/', admin_views.admin_user_reset_password_view, name='admin-user-reset-password'),
     path('users/<int:user_id>/generate-reset-key/', admin_views.admin_user_generate_reset_key_view, name='admin-user-generate-reset-key'),
+    path('reset-requests/', admin_views.admin_reset_requests_view, name='admin-reset-requests'),
 
     # Roles
     path('roles/', admin_views.admin_roles_view, name='admin-roles'),

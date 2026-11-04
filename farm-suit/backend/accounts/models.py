@@ -169,3 +169,25 @@ class PasswordResetToken(models.Model):
     def __str__(self):
         status = "Active" if self.is_valid() else ("Used" if self.is_used else "Expired")
         return f"ResetToken({self.user.username}, status={status})"
+
+
+class PasswordResetRequest(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('RESOLVED', 'Resolved'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_requests')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', db_index=True)
+    requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolved_reset_requests'
+    )
+    ip_address = models.CharField(max_length=45, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"ResetRequest({self.user.username}, status={self.status}, requested_at={self.requested_at})"
