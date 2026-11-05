@@ -132,15 +132,16 @@ export const SalesCreatePage = ({ onNavigate }) => {
       return;
     }
 
-    // Check available stock in frontend before sending
-    for (let i = 0; i < lines.length; i++) {
-      const q = parseFloat(lines[i].quantity) || 0;
-      const avail = parseFloat(lines[i].available_stock) || 0;
-      if (q > avail) {
-        addToast(`Insufficient stock for line ${i + 1}. Requested: ${q}, Available: ${avail}`, 'error');
-        return;
-      }
-    }
+    // [STOCK LOGIC DISABLED - COMMENTED OUT]
+    // // Check available stock in frontend before sending
+    // for (let i = 0; i < lines.length; i++) {
+    //   const q = parseFloat(lines[i].quantity) || 0;
+    //   const avail = parseFloat(lines[i].available_stock) || 0;
+    //   if (q > avail) {
+    //     addToast(`Insufficient stock for line ${i + 1}. Requested: ${q}, Available: ${avail}`, 'error');
+    //     return;
+    //   }
+    // }
 
     const payload = {
       customer_id: customerId,
@@ -373,7 +374,9 @@ export const SalesCreatePage = ({ onNavigate }) => {
             <tbody>
               {lines.map((line, idx) => {
                 const lineAmount = (parseFloat(line.quantity) || 0) * (parseFloat(line.selling_rate) || 0);
-                const isOverStock = (parseFloat(line.quantity) || 0) > (parseFloat(line.available_stock) || 0);
+                // [STOCK LOGIC DISABLED - COMMENTED OUT]
+                // const isOverStock = (parseFloat(line.quantity) || 0) > (parseFloat(line.available_stock) || 0);
+                const isOverStock = false;
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -416,7 +419,7 @@ export const SalesCreatePage = ({ onNavigate }) => {
                         value={line.quantity}
                         onChange={(e) => handleLineFieldChange(idx, 'quantity', e.target.value)}
                         suffix={line.unit}
-                        error={isOverStock ? 'Exceeds stock!' : null}
+                        /* [STOCK LOGIC DISABLED - COMMENTED OUT] error={isOverStock ? 'Exceeds stock!' : null} */
                       />
                     </td>
 
@@ -605,7 +608,7 @@ export const SalesCreatePage = ({ onNavigate }) => {
             onClick={() => handleSubmit(true)}
             disabled={submitting}
           >
-            {submitting ? 'Processing...' : 'Post Bill & Deduct Stock'}
+            {submitting ? 'Processing...' : 'Post Bill'} {/* [STOCK LOGIC DISABLED] & Deduct Stock */}
           </Button>
         </div>
       </div>

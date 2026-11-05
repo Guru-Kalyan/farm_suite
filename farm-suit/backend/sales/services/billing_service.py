@@ -182,64 +182,103 @@ def post_sales_bill(bill_id, items_data, user):
         except (ValueError, TypeError, InvalidOperation):
             raise ValidationError(f"Invalid quantity or selling rate for item {item.name}")
 
-        # Check total available stock
-        available_lots = InventoryLot.objects.select_for_update().filter(
-            item=item,
-            status='AVAILABLE',
-            available_quantity__gt=0
-        ).order_by('received_date', 'id')
+        # ==============================================================================
+        # [STOCK LOGIC DISABLED - COMMENTED OUT AS REQUESTED]
+        # To re-enable stock verification and FIFO stock deduction, uncomment the block below:
+        #
+        # # Check total available stock
+        # available_lots = InventoryLot.objects.select_for_update().filter(
+        #     item=item,
+        #     status='AVAILABLE',
+        #     available_quantity__gt=0
+        # ).order_by('received_date', 'id')
+        #
+        # total_avail = available_lots.aggregate(total=Sum('available_quantity'))['total'] or Decimal('0.000')
+        #
+        # if total_avail < qty_needed:
+        #     raise ValidationError(
+        #         f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
+        #     )
+        #
+        # # FIFO consumption
+        # qty_remaining = qty_needed
+        # for lot in available_lots:
+        #     if qty_remaining <= Decimal('0.000'):
+        #         break
+        #
+        #     qty_from_lot = min(lot.available_quantity, qty_remaining)
+        #     lot.available_quantity -= qty_from_lot
+        #     if lot.available_quantity == Decimal('0.000'):
+        #         lot.status = 'DEPLETED'
+        #     lot.save()
+        #
+        #     line_revenue = (qty_from_lot * selling_rate).quantize(Decimal('0.01'))
+        #     line_cogs = (qty_from_lot * lot.unit_cost).quantize(Decimal('0.01'))
+        #     line_profit = line_revenue - line_cogs
+        #
+        #     subtotal += line_revenue
+        #     total_cogs += line_cogs
+        #
+        #     # Record stock movement
+        #     StockMovement.objects.create(
+        #         inventory_lot=lot,
+        #         movement_type='SALE',
+        #         quantity=qty_from_lot,
+        #         reference_type='SALES_BILL',
+        #         reference_id=bill.id,
+        #         created_by=user,
+        #         remarks=f"Sale to {bill.customer.customer_name} via Bill {bill.bill_number}"
+        #     )
+        #
+        #     # Record sales line
+        #     sl = SalesLine.objects.create(
+        #         sales_bill=bill,
+        #         item=item,
+        #         inventory_lot=lot,
+        #         quantity=qty_from_lot,
+        #         selling_rate=selling_rate,
+        #         revenue=line_revenue,
+        #         cost_of_goods_sold=line_cogs,
+        #         gross_profit=line_profit
+        #     )
+        #     created_lines.append(sl)
+        #
+        #     qty_remaining -= qty_from_lot
+        # ==============================================================================
 
-        total_avail = available_lots.aggregate(total=Sum('available_quantity'))['total'] or Decimal('0.000')
-
-        if total_avail < qty_needed:
-            raise ValidationError(
-                f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
-            )
-
-        # FIFO consumption
-        qty_remaining = qty_needed
-        for lot in available_lots:
-            if qty_remaining <= Decimal('0.000'):
-                break
-
-            qty_from_lot = min(lot.available_quantity, qty_remaining)
-            lot.available_quantity -= qty_from_lot
-            if lot.available_quantity == Decimal('0.000'):
-                lot.status = 'DEPLETED'
-            lot.save()
-
-            line_revenue = (qty_from_lot * selling_rate).quantize(Decimal('0.01'))
-            line_cogs = (qty_from_lot * lot.unit_cost).quantize(Decimal('0.01'))
-            line_profit = line_revenue - line_cogs
-
-            subtotal += line_revenue
-            total_cogs += line_cogs
-
-            # Record stock movement
-            StockMovement.objects.create(
-                inventory_lot=lot,
-                movement_type='SALE',
-                quantity=qty_from_lot,
-                reference_type='SALES_BILL',
-                reference_id=bill.id,
-                created_by=user,
-                remarks=f"Sale to {bill.customer.customer_name} via Bill {bill.bill_number}"
-            )
-
-            # Record sales line
-            sl = SalesLine.objects.create(
-                sales_bill=bill,
+        # --- DIRECT SALES BILLING (WITHOUT STOCK DEDUCTION) ---
+        lot = InventoryLot.objects.filter(item=item).first()
+        if not lot:
+            lot, _ = InventoryLot.objects.get_or_create(
+                lot_number=f"LOT-{item.id}-DIRECT",
                 item=item,
-                inventory_lot=lot,
-                quantity=qty_from_lot,
-                selling_rate=selling_rate,
-                revenue=line_revenue,
-                cost_of_goods_sold=line_cogs,
-                gross_profit=line_profit
+                defaults={
+                    'source_type': 'PURCHASE',
+                    'original_quantity': Decimal('999999.000'),
+                    'available_quantity': Decimal('999999.000'),
+                    'unit_cost': Decimal('0.00'),
+                    'status': 'AVAILABLE'
+                }
             )
-            created_lines.append(sl)
 
-            qty_remaining -= qty_from_lot
+        line_revenue = (qty_needed * selling_rate).quantize(Decimal('0.01'))
+        line_cogs = (qty_needed * lot.unit_cost).quantize(Decimal('0.01'))
+        line_profit = line_revenue - line_cogs
+
+        subtotal += line_revenue
+        total_cogs += line_cogs
+
+        sl = SalesLine.objects.create(
+            sales_bill=bill,
+            item=item,
+            inventory_lot=lot,
+            quantity=qty_needed,
+            selling_rate=selling_rate,
+            revenue=line_revenue,
+            cost_of_goods_sold=line_cogs,
+            gross_profit=line_profit
+        )
+        created_lines.append(sl)
 
     bill.tax_amount = Decimal('0.00')
     grand_total = (subtotal - bill.discount).quantize(Decimal('0.01'))
@@ -298,23 +337,27 @@ def reverse_sales_bill(bill_id, user, reason):
             f"Please reverse or resolve recorded payments before reversing the bill."
         )
 
-    lines = bill.lines.select_related('inventory_lot').all()
-    for line in lines:
-        lot = line.inventory_lot
-        lot.available_quantity += line.quantity
-        if lot.status == 'DEPLETED':
-            lot.status = 'AVAILABLE'
-        lot.save()
-
-        StockMovement.objects.create(
-            inventory_lot=lot,
-            movement_type='REVERSAL',
-            quantity=line.quantity,
-            reference_type='SALES_BILL',
-            reference_id=bill.id,
-            created_by=user,
-            remarks=f"Reversal of Sales Bill {bill.bill_number}: {reason}"
-        )
+    # ==============================================================================
+    # [STOCK LOGIC DISABLED - COMMENTED OUT AS REQUESTED]
+    # lines = bill.lines.select_related('inventory_lot').all()
+    # for line in lines:
+    #     lot = line.inventory_lot
+    #     if lot:
+    #         lot.available_quantity += line.quantity
+    #         if lot.status == 'DEPLETED':
+    #             lot.status = 'AVAILABLE'
+    #         lot.save()
+    #
+    #         StockMovement.objects.create(
+    #             inventory_lot=lot,
+    #             movement_type='REVERSAL',
+    #             quantity=line.quantity,
+    #             reference_type='SALES_BILL',
+    #             reference_id=bill.id,
+    #             created_by=user,
+    #             remarks=f"Reversal of Sales Bill {bill.bill_number}: {reason}"
+    #         )
+    # ==============================================================================
 
     bill.status = 'REVERSED'
     bill.remarks = f"{bill.remarks}\n[REVERSED on {bill.updated_at}]: {reason}".strip()
