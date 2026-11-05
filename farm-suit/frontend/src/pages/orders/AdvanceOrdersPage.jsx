@@ -7,6 +7,7 @@ import { Select } from '../../components/common/Select';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { OrderEditModal } from './OrderEditModal';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
@@ -15,6 +16,7 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
   const { hasPermission } = useAuth();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -348,6 +350,17 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
                           <Button variant="ghost" size="sm" onClick={() => onNavigate(`/orders/${o.id}`)}>
                             Manage →
                           </Button>
+                          {hasPermission('orders.edit') && !(o.fulfilled_sales_bill || o.linked_sale_bill) && o.status !== 'CANCELLED' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              style={{ color: 'var(--primary)' }}
+                              onClick={() => setEditingOrder(o)}
+                              title="Edit Advance Order"
+                            >
+                              ✏️ Edit
+                            </Button>
+                          )}
                           {hasPermission('sales.delete') && (
                             <Button
                               variant="ghost"
@@ -368,6 +381,16 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
           </div>
         )}
       </div>
+
+      {/* Edit Advance Order Modal */}
+      {editingOrder && (
+        <OrderEditModal
+          orderId={editingOrder.id}
+          isOpen={Boolean(editingOrder)}
+          onClose={() => setEditingOrder(null)}
+          onOrderUpdated={() => fetchOrders()}
+        />
+      )}
 
       {/* Delete Confirmation */}
       {deleteTarget && (

@@ -167,6 +167,141 @@ def create_order(data, user):
 
     return order
 
+
+@transaction.atomic
+def update_order(order_id, data, user):
+    """
+    Updates an existing REGULAR or ADVANCE order.
+    Checks that the order is not fulfilled to a sales bill and not cancelled.
+    Atomically updates fields, line items, and recalculates totals.
+    """
+    try:
+        order = Order.objects.select_for_update().get(pk=order_id)
+    except Order.DoesNotExist:
+        raise ValidationError("Order not found")
+
+    if order.fulfilled_sales_bill:
+        raise ValidationError(f"Cannot edit order {order.order_number}: It is fulfilled to Sales Bill {order.fulfilled_sales_bill.bill_number}.")
+
+    if order.status == 'CANCELLED':
+        raise ValidationError(f"Cannot edit order {order.order_number}: It has been cancelled.")
+
+    old_values = {
+        "order_number": order.order_number,
+        "customer": order.customer.customer_name,
+        "delivery_date": str(order.delivery_date),
+        "total_amount": str(order.total_amount),
+        "lines_count": order.lines.count()
+    }
+
+    # 1. Customer
+    customer_id = data.get("customer_id")
+    if customer_id and str(customer_id) != str(order.customer_id):
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+            order.customer = customer
+        except Customer.DoesNotExist:
+            raise ValidationError({"customer_id": ["Selected customer does not exist"]})
+
+    # 2. Delivery Date
+    delivery_date = data.get("delivery_date") or data.get("requested_delivery_date")
+    if delivery_date:
+        order.delivery_date = delivery_date
+
+    # 3. Delivery address, instructions, notes
+    if "delivery_address" in data:
+        order.delivery_address = data["delivery_address"].strip()
+    if "delivery_instructions" in data or "delivery_notes" in data:
+        order.delivery_instructions = (data.get("delivery_instructions") or data.get("delivery_notes") or "").strip()
+    if "notes" in data:
+        order.notes = data["notes"].strip()
+
+    # 4. Lines & Totals
+    items_data = data.get("items") or data.get("lines")
+    if items_data is not None:
+        if not items_data:
+            raise ValidationError({"items": ["At least one item is required in the order"]})
+
+        discount = order.discount
+        if "discount" in data:
+            try:
+                discount = Decimal(str(data.get("discount", "0.00")))
+                if discount < 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise ValidationError({"discount": ["Discount must be a non-negative decimal"]})
+
+        subtotal = Decimal('0.00')
+        validated_lines = []
+        for idx, it in enumerate(items_data):
+            item_id = it.get("item_id")
+            if not item_id:
+                raise ValidationError({f"items[{idx}].item_id": ["Item is required"]})
+            try:
+                item = Item.objects.get(pk=item_id)
+            except Item.DoesNotExist:
+                raise ValidationError({f"items[{idx}].item_id": ["Item does not exist"]})
+
+            try:
+                qty = Decimal(str(it.get("quantity", "0")))
+                rate_raw = it.get("unit_rate") if it.get("unit_rate") is not None else it.get("unit_price", "0")
+                rate = Decimal(str(rate_raw))
+                if qty <= 0 or rate < 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise ValidationError({f"items[{idx}]": ["Quantity must be > 0 and unit rate must be >= 0"]})
+
+            amount = (qty * rate).quantize(Decimal('0.01'))
+            subtotal += amount
+            validated_lines.append({
+                "item": item,
+                "quantity": qty,
+                "unit_rate": rate,
+                "amount": amount,
+                "notes": it.get("notes", "")
+            })
+
+        total_amount = max(Decimal('0.00'), (subtotal - discount).quantize(Decimal('0.01')))
+
+        # Delete existing lines and re-create atomically
+        order.lines.all().delete()
+        for vl in validated_lines:
+            OrderLine.objects.create(
+                order=order,
+                item=vl["item"],
+                quantity=vl["quantity"],
+                unit_rate=vl["unit_rate"],
+                amount=vl["amount"],
+                notes=vl["notes"]
+            )
+
+        order.subtotal = subtotal
+        order.discount = discount
+        order.total_amount = total_amount
+
+    order.save()
+
+    new_values = {
+        "order_number": order.order_number,
+        "customer": order.customer.customer_name,
+        "delivery_date": str(order.delivery_date),
+        "total_amount": str(order.total_amount),
+        "lines_count": order.lines.count()
+    }
+
+    record_audit(
+        user=user,
+        model_name="Order",
+        object_id=order.id,
+        action="UPDATE",
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated Order '{order.order_number}' ({order.get_order_type_display()})"
+    )
+
+    return order
+
+
 @transaction.atomic
 def record_order_advance(order_id, advance_data, user):
     """
@@ -265,6 +400,7 @@ def change_order_status(order_id, new_status, user, notes=""):
     )
 
     return order
+
 
 @transaction.atomic
 def fulfill_order_to_sale(order_id, user, post_immediately=True):

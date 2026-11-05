@@ -6,13 +6,17 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { RecordPaymentModal } from '../../components/billing/RecordPaymentModal';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
+import { OrderEditModal } from './OrderEditModal';
 
 export const OrderDetailPage = ({ id, onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [confirmFulfillOpen, setConfirmFulfillOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
@@ -107,6 +111,12 @@ export const OrderDetailPage = ({ id, onNavigate }) => {
 
           {!isCancelled && !isFulfilled && (
             <>
+              {hasPermission('orders.edit') && (
+                <Button variant="secondary" onClick={() => setEditModalOpen(true)}>
+                  ✏️ Edit Order
+                </Button>
+              )}
+
               {remainingExpected > 0 && (
                 <Button variant="secondary" onClick={() => setAdvanceModalOpen(true)}>
                   💰 Record Advance
@@ -339,6 +349,16 @@ export const OrderDetailPage = ({ id, onNavigate }) => {
           </div>
         )}
       </div>
+
+      {/* Edit Order Modal */}
+      {editModalOpen && (
+        <OrderEditModal
+          orderId={order.id}
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          onOrderUpdated={() => fetchOrder()}
+        />
+      )}
 
       {/* Record Advance Modal */}
       <RecordPaymentModal

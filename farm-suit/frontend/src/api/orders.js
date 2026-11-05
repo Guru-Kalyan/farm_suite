@@ -13,6 +13,10 @@ export const ordersApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  updateOrder: (id, data) => apiClient(`/api/orders/${id}/`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
   deleteOrder: (id) => apiClient(`/api/orders/${id}/`, {
     method: 'DELETE'
   }),

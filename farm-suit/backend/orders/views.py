@@ -13,6 +13,7 @@ from masters.views import paginate_queryset
 from orders.models import Order, OrderLine, OrderAdvance
 from orders.services.order_service import (
     create_order,
+    update_order,
     record_order_advance,
     change_order_status,
     fulfill_order_to_sale
@@ -164,7 +165,7 @@ def orders_view(request):
                 status=400
             )
 
-@require_http_methods(["GET", "DELETE"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def order_detail_view(request, pk):
     try:
@@ -240,6 +241,32 @@ def order_detail_view(request, pk):
             "created_at": order.created_at,
             "updated_at": order.updated_at
         })
+
+    elif request.method == "PUT":
+        if not has_permission(request.user, "orders.edit"):
+            return json_error("Forbidden: You do not have permission to edit orders.", status=403)
+
+        data = parse_json_body(request)
+        if not data:
+            return json_error("Invalid JSON body", status=400)
+
+        try:
+            updated_order = update_order(pk, data, request.user)
+            return json_success({
+                "id": updated_order.id,
+                "order_number": updated_order.order_number,
+                "order_type": updated_order.order_type,
+                "total_amount": str(updated_order.total_amount),
+                "advance_amount": str(updated_order.advance_amount),
+                "remaining_balance": str(updated_order.remaining_balance),
+                "status": updated_order.status
+            }, message=f"Order {updated_order.order_number} updated successfully")
+        except ValidationError as e:
+            return json_error(
+                message="Order update failed",
+                errors=e.message_dict if hasattr(e, 'message_dict') else {"detail": e.messages if hasattr(e, 'messages') else str(e)},
+                status=400
+            )
 
     elif request.method == "DELETE":
         if not has_permission(request.user, "sales.delete"):

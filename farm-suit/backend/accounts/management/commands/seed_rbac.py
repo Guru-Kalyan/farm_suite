@@ -45,11 +45,12 @@ PERMISSIONS_DATA = [
     {"code": "inventory.delete", "name": "Delete Stock", "module": "Inventory", "description": "Can remove stock lots"},
     {"code": "inventory.stock_adjustment", "name": "Stock Adjustment", "module": "Inventory", "description": "Can perform manual stock ledger adjustments"},
 
-    # Sales
+    # Sales & Orders
     {"code": "sales.view", "name": "View Sales", "module": "Sales", "description": "Can view sales bills and transactions"},
     {"code": "sales.create", "name": "Create Sales", "module": "Sales", "description": "Can create new sales bills"},
     {"code": "sales.edit", "name": "Edit Sales", "module": "Sales", "description": "Can edit sales bills"},
     {"code": "sales.delete", "name": "Delete Sales", "module": "Sales", "description": "Can cancel or delete sales bills"},
+    {"code": "orders.edit", "name": "Edit Orders & Advance Bookings", "module": "Sales", "description": "Can edit existing regular and advance orders"},
 
     # Purchases
     {"code": "purchases.view", "name": "View Purchases", "module": "Purchases", "description": "Can view purchase bills and procurement"},
