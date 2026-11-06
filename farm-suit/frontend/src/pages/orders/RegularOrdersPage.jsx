@@ -132,7 +132,7 @@ export const RegularOrdersPage = ({ onNavigate }) => {
               {summary.total_orders || orders.length}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Est. Total: {formatCurrency(summary.total_estimated_amount)}
+              Est. Total: {formatCurrency(summary.total_estimated_amount ?? summary.total_value ?? 0)}
             </div>
           </div>
 

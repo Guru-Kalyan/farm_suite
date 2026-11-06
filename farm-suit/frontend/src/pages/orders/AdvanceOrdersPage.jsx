@@ -134,7 +134,7 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
               {summary.total_orders || orders.length}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Expected: {formatCurrency(summary.total_estimated_amount)}
+              Expected: {formatCurrency(summary.total_estimated_amount ?? summary.total_value ?? 0)}
             </div>
           </div>
 
@@ -149,7 +149,7 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
               Total Advances Received
             </div>
             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>
-              {formatCurrency(summary.total_advance_received)}
+              {formatCurrency(summary.total_advance_received ?? summary.total_advances ?? 0)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
               Held as customer credits
@@ -167,7 +167,7 @@ export const AdvanceOrdersPage = ({ onNavigate }) => {
               Remaining Expected Balance
             </div>
             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>
-              {formatCurrency(summary.total_remaining_balance)}
+              {formatCurrency(summary.total_remaining_balance ?? summary.total_expected_balance ?? 0)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
               To collect on delivery

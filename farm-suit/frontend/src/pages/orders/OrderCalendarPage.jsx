@@ -15,7 +15,8 @@ export const OrderCalendarPage = ({ onNavigate }) => {
       setLoading(true);
       const res = await ordersApi.getCalendar();
       if (res && res.data) {
-        setCalendar(res.data);
+        const plan = res.data.planning || res.data;
+        setCalendar(plan);
       }
     } catch (err) {
       addToast(err.message || 'Failed to load delivery calendar', 'error');
@@ -28,76 +29,98 @@ export const OrderCalendarPage = ({ onNavigate }) => {
     fetchCalendar();
   }, [fetchCalendar]);
 
-  const renderOrderCard = (order) => (
-    <div
-      key={order.id}
-      onClick={() => onNavigate(`/orders/${order.id}`)}
-      style={{
-        backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-md)',
-        padding: '14px',
-        boxShadow: 'var(--shadow-sm)',
-        cursor: 'pointer',
-        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)', fontSize: '13px' }}>
-            {order.order_number}
-          </span>
-          <div style={{ fontWeight: '700', fontSize: '14px', marginTop: '2px' }}>
-            {order.customer?.name}
+  const renderOrderCard = (order) => {
+    const custName = order.customer?.customer_name || order.customer?.name || order.customer_name || 'Customer';
+    const delivery = order.delivery_date || order.requested_delivery_date;
+    const itemsText = order.items_summary || (order.lines && order.lines.length > 0
+      ? order.lines.map(l => `${l.quantity} ${l.item?.unit?.short_name || ''} ${l.item?.name}`).join(', ')
+      : 'No items listed');
+    const totalVal = order.total_amount ?? order.estimated_total ?? '0.00';
+    const remVal = parseFloat(order.remaining_balance || 0);
+
+    return (
+      <div
+        key={order.id}
+        onClick={() => onNavigate(`/orders/${order.id}`)}
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)',
+          padding: '14px',
+          boxShadow: 'var(--shadow-sm)',
+          cursor: 'pointer',
+          transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)', fontSize: '13px' }}>
+              {order.order_number}
+            </span>
+            <div style={{ fontWeight: '700', fontSize: '14px', marginTop: '2px' }}>
+              {custName}
+            </div>
+            {order.phone && (
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {order.phone}
+              </div>
+            )}
           </div>
+          <StatusBadge status={order.status} />
         </div>
-        <StatusBadge status={order.status} />
-      </div>
 
-      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-        <b>Delivery:</b> {formatDate(order.requested_delivery_date)}
-      </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <b>Delivery:</b> {formatDate(delivery)}
+        </div>
 
-      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-        Items: {(order.lines || []).map(l => `${l.quantity} ${l.item?.unit?.short_name || ''} ${l.item?.name}`).join(', ')}
-      </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          Items: {itemsText}
+        </div>
 
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderTop: '1px solid var(--border-subtle)',
-        paddingTop: '8px',
-        marginTop: '4px',
-        fontSize: '12px'
-      }}>
-        <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
-          {formatCurrency(order.estimated_total)}
-        </span>
-        <span style={{
-          padding: '2px 6px',
-          borderRadius: '4px',
-          fontSize: '10.5px',
-          fontWeight: '700',
-          backgroundColor: order.order_type === 'ADVANCE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-          color: order.order_type === 'ADVANCE' ? 'var(--success)' : 'var(--primary)'
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderTop: '1px solid var(--border-subtle)',
+          paddingTop: '8px',
+          marginTop: '4px',
+          fontSize: '12px'
         }}>
-          {order.order_type}
-        </span>
+          <div>
+            <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
+              {formatCurrency(totalVal)}
+            </span>
+            {remVal > 0 && order.order_type === 'ADVANCE' && (
+              <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--warning)', fontWeight: '600' }}>
+                Bal: {formatCurrency(remVal)}
+              </span>
+            )}
+          </div>
+          <span style={{
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontSize: '10.5px',
+            fontWeight: '700',
+            backgroundColor: order.order_type === 'ADVANCE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+            color: order.order_type === 'ADVANCE' ? 'var(--success)' : 'var(--primary)'
+          }}>
+            {order.order_type}
+          </span>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -206,6 +229,24 @@ export const OrderCalendarPage = ({ onNavigate }) => {
                 Medium-term delivery commitments
               </div>
             </div>
+
+            <div style={{
+              backgroundColor: 'var(--bg-surface)',
+              padding: '16px 20px',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)'
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                🔮 Future (&gt; 7 Days)
+              </div>
+              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {calendar.future?.length || 0}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Longer-term commitments
+              </div>
+            </div>
           </div>
 
           {/* Delivery Columns / Swimlanes */}
@@ -311,6 +352,31 @@ export const OrderCalendarPage = ({ onNavigate }) => {
               ) : (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12.5px' }}>
                   No upcoming deliveries in the next 7 days.
+                </div>
+              )}
+            </div>
+
+            {/* Future (> 7 Days) */}
+            <div style={{
+              backgroundColor: 'var(--bg-surface-secondary)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border-subtle)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem' }}>🔮 Future (&gt; 7 Days)</h3>
+                <span style={{ fontSize: '12px', fontWeight: '700' }}>
+                  {calendar.future?.length || 0}
+                </span>
+              </div>
+              {calendar.future && calendar.future.length > 0 ? (
+                calendar.future.map(renderOrderCard)
+              ) : (
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12.5px' }}>
+                  No future orders scheduled beyond 7 days.
                 </div>
               )}
             </div>

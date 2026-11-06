@@ -99,9 +99,15 @@ def orders_view(request):
             "dispatched_count": counts['dispatched'] or 0,
             "delivered_count": counts['delivered'] or 0,
             "cancelled_count": counts['cancelled'] or 0,
+            # Standard names
             "total_value": str(tot_val),
             "total_advances": str(tot_adv),
-            "total_expected_balance": str(tot_rem)
+            "total_expected_balance": str(tot_rem),
+            # Aliases used in frontend pages
+            "total_estimated_amount": str(tot_val),
+            "total_advance_received": str(tot_adv),
+            "total_remaining_balance": str(tot_rem),
+            "total_amount": str(tot_val),
         }
 
         paginated = paginate_queryset(qs, request)
@@ -429,29 +435,52 @@ def orders_calendar_view(request):
             "id": o.id,
             "order_number": o.order_number,
             "order_type": o.order_type,
+            "customer": {
+                "id": o.customer.id,
+                "name": o.customer.customer_name,
+                "customer_name": o.customer.customer_name,
+                "phone": o.customer.phone
+            },
             "customer_name": o.customer.customer_name,
             "phone": o.customer.phone,
-            "delivery_date": o.delivery_date,
+            "delivery_date": str(o.delivery_date),
+            "requested_delivery_date": str(o.delivery_date),
             "status": o.status,
             "total_amount": str(o.total_amount),
+            "estimated_total": str(o.total_amount),
             "advance_amount": str(o.advance_amount),
             "remaining_balance": str(o.remaining_balance),
-            "items_summary": ", ".join([f"{l.quantity} {l.item.unit.short_name} {l.item.name}" for l in o.lines.all()[:3]])
+            "items_summary": ", ".join([f"{l.quantity} {l.item.unit.short_name if getattr(l.item, 'unit', None) else ''} {l.item.name}" for l in o.lines.all()[:3]]) or "No items listed",
+            "lines": [{
+                "quantity": str(l.quantity),
+                "item": {
+                    "name": l.item.name,
+                    "unit": {"short_name": l.item.unit.short_name if getattr(l.item, 'unit', None) else ""}
+                }
+            } for l in o.lines.all()]
         } for o in queryset]
 
-    return json_success({
-        "planning": {
-            "overdue": format_orders(overdue_orders),
-            "today": format_orders(today_orders),
-            "tomorrow": format_orders(tomorrow_orders),
-            "upcoming_week": format_orders(upcoming_week_orders),
-            "future": format_orders(future_orders),
-            "counts": {
-                "overdue": overdue_orders.count(),
-                "today": today_orders.count(),
-                "tomorrow": tomorrow_orders.count(),
-                "upcoming_week": upcoming_week_orders.count(),
-                "future": future_orders.count()
-            }
+    planning_dict = {
+        "overdue": format_orders(overdue_orders),
+        "today": format_orders(today_orders),
+        "tomorrow": format_orders(tomorrow_orders),
+        "upcoming_week": format_orders(upcoming_week_orders),
+        "future": format_orders(future_orders),
+        "counts": {
+            "overdue": overdue_orders.count(),
+            "today": today_orders.count(),
+            "tomorrow": tomorrow_orders.count(),
+            "upcoming_week": upcoming_week_orders.count(),
+            "future": future_orders.count()
         }
+    }
+
+    return json_success({
+        "planning": planning_dict,
+        "overdue": planning_dict["overdue"],
+        "today": planning_dict["today"],
+        "tomorrow": planning_dict["tomorrow"],
+        "upcoming_week": planning_dict["upcoming_week"],
+        "future": planning_dict["future"],
+        "counts": planning_dict["counts"],
     })
