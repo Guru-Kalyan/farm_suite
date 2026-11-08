@@ -49,7 +49,11 @@ def serialize_expense(exp):
 @require_http_methods(["GET", "POST"])
 @api_login_required
 def expenses_list_create_view(request):
+    from accounts.services.permission_service import has_permission
     if request.method == "GET":
+        if not has_permission(request.user, 'expenses.view'):
+            return json_error("Forbidden: You do not have permission to view expenses.", status=403)
+
         qs = Expense.objects.select_related('created_by').all()
 
         # Date range filters
@@ -215,6 +219,8 @@ def expense_detail_view(request, pk):
     from accounts.services.permission_service import has_permission
 
     if request.method == "GET":
+        if not has_permission(request.user, 'expenses.view'):
+            return json_error("Forbidden: You do not have permission to view expenses.", status=403)
         return json_success(serialize_expense(exp))
 
     elif request.method == "PUT":

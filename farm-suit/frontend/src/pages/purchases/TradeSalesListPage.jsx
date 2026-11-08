@@ -10,9 +10,13 @@ import { generateSaleWhatsAppUrl } from '../../utils/whatsappShare';
 import { downloadSalesInvoicePdf } from '../../utils/pdfDownload';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
+import { InvoiceEditModal } from '../../components/sales/InvoiceEditModal';
 
 export const TradeSalesListPage = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [editingBill, setEditingBill] = useState(null);
   const [sales, setSales] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -337,6 +341,29 @@ export const TradeSalesListPage = ({ onNavigate }) => {
                             type="trade_sale"
                             title="Share invoice on WhatsApp with PDF"
                           />
+                          {hasPermission('sales.edit') && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingBill(s);
+                              }}
+                              title="Edit Trade Sale"
+                              style={{
+                                background: 'none',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '5px 8px',
+                                cursor: 'pointer',
+                                color: 'var(--text-secondary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                fontSize: '12px'
+                              }}
+                            >
+                              ✏️
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => handlePdfDownload(e, s)}
@@ -364,6 +391,15 @@ export const TradeSalesListPage = ({ onNavigate }) => {
           </div>
         )}
       </div>
+
+      {editingBill && (
+        <InvoiceEditModal
+          isOpen={Boolean(editingBill)}
+          bill={editingBill}
+          onClose={() => setEditingBill(null)}
+          onSuccess={fetchTradeSales}
+        />
+      )}
     </div>
   );
 };

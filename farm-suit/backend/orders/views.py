@@ -23,6 +23,9 @@ from orders.services.order_service import (
 @api_login_required
 def orders_view(request):
     if request.method == "GET":
+        if not has_permission(request.user, "orders.view"):
+            return json_error("Forbidden: You do not have permission to view orders.", status=403)
+
         search = request.GET.get("search", "").strip()
         customer_id = request.GET.get("customer_id", "").strip()
         order_type = request.GET.get("order_type", "").strip().upper()
@@ -150,6 +153,9 @@ def orders_view(request):
         })
 
     elif request.method == "POST":
+        if not has_permission(request.user, "orders.create"):
+            return json_error("Forbidden: You do not have permission to create orders.", status=403)
+
         data = parse_json_body(request)
         if not data:
             return json_error("Invalid JSON body", status=400)
@@ -182,6 +188,9 @@ def order_detail_view(request, pk):
         return json_error("Order not found", status=404)
 
     if request.method == "GET":
+        if not has_permission(request.user, "orders.view"):
+            return json_error("Forbidden: You do not have permission to view orders.", status=403)
+
         lines_data = [{
             "id": l.id,
             "item": {
@@ -275,7 +284,7 @@ def order_detail_view(request, pk):
             )
 
     elif request.method == "DELETE":
-        if not has_permission(request.user, "sales.delete"):
+        if not (has_permission(request.user, "orders.delete") or has_permission(request.user, "sales.delete")):
             return json_error("Forbidden: You do not have permission to delete orders.", status=403)
 
         if order.fulfilled_sales_bill:
@@ -310,6 +319,9 @@ def order_detail_view(request, pk):
 @require_http_methods(["POST"])
 @api_login_required
 def order_status_view(request, pk):
+    if not has_permission(request.user, "orders.edit"):
+        return json_error("Forbidden: You do not have permission to update order status.", status=403)
+
     data = parse_json_body(request)
     new_status = data.get("status", "")
     notes = data.get("notes", "")
@@ -333,6 +345,9 @@ def order_advances_view(request, pk):
         return json_error("Order not found", status=404)
 
     if request.method == "GET":
+        if not has_permission(request.user, "orders.view"):
+            return json_error("Forbidden: You do not have permission to view orders.", status=403)
+
         advances = order.advances.select_related('recorded_by').all()
         data = [{
             "id": a.id,
@@ -355,6 +370,9 @@ def order_advances_view(request, pk):
         })
 
     elif request.method == "POST":
+        if not (has_permission(request.user, "orders.edit") or has_permission(request.user, "payments.create") or has_permission(request.user, "orders.create")):
+            return json_error("Forbidden: You do not have permission to record advance payments.", status=403)
+
         data = parse_json_body(request)
         if not data:
             return json_error("Invalid JSON body", status=400)
@@ -385,6 +403,9 @@ def order_advances_view(request, pk):
 @require_http_methods(["POST"])
 @api_login_required
 def order_fulfill_view(request, pk):
+    if not (has_permission(request.user, "orders.edit") and has_permission(request.user, "sales.create")):
+        return json_error("Forbidden: You do not have permission to fulfill orders to sales bills.", status=403)
+
     data = parse_json_body(request)
     post_now = data.get("post_now", True) if data else True
 
@@ -416,6 +437,9 @@ def orders_calendar_view(request):
     Planning dashboard and calendar view of deliveries:
     Groups upcoming commitments into Today, Tomorrow, Upcoming Week, Overdue, and Future.
     """
+    if not has_permission(request.user, "orders.view"):
+        return json_error("Forbidden: You do not have permission to view delivery calendar.", status=403)
+
     today = timezone.now().date()
     tomorrow = today + datetime.timedelta(days=1)
     week_end = today + datetime.timedelta(days=7)

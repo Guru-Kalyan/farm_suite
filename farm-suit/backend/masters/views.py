@@ -101,6 +101,8 @@ def category_detail_view(request, pk):
         })
 
     elif request.method == "PUT":
+        if not has_permission(request.user, "inventory.edit"):
+            return json_error("Forbidden: You do not have permission to edit units of measure.", status=403)
         data = parse_json_body(request)
         if not data:
             return json_error("Invalid JSON body", status=400)
@@ -181,6 +183,8 @@ def units_view(request):
         return json_success({"units": data})
 
     elif request.method == "POST":
+        if not has_permission(request.user, "inventory.create"):
+            return json_error("Forbidden: You do not have permission to create units of measure.", status=403)
         data = parse_json_body(request)
         name = data.get("name", "").strip()
         short_name = data.get("short_name", "").strip()
@@ -875,6 +879,8 @@ def farm_plots_view(request):
         return json_success({"plots": data, "pagination": paginated['pagination']})
 
     elif request.method == "POST":
+        if not has_permission(request.user, "inventory.create"):
+            return json_error("Forbidden: You do not have permission to create units of measure.", status=403)
         data = parse_json_body(request)
         name = data.get("name", "").strip()
         location = data.get("location", "").strip()

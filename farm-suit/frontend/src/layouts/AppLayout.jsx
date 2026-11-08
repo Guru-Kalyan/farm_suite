@@ -84,9 +84,9 @@ export const AppLayout = ({
       {
         label: 'Orders',
         items: [
-          { path: '/orders/regular', label: 'Regular Orders', icon: '📦', requiredPerm: 'sales.view' },
-          { path: '/orders/advance', label: 'Advance Orders', icon: '⏳', requiredPerm: 'sales.view' },
-          { path: '/orders/calendar', label: 'Order Calendar / Deliveries', icon: '📅', requiredPerm: 'sales.view' }
+          { path: '/orders/regular', label: 'Regular Orders', icon: '📦', requiredPerm: 'orders.view' },
+          { path: '/orders/advance', label: 'Advance Orders', icon: '⏳', requiredPerm: 'orders.view' },
+          { path: '/orders/calendar', label: 'Order Calendar / Deliveries', icon: '📅', requiredPerm: 'orders.view' }
         ]
       },
       {

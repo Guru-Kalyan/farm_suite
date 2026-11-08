@@ -279,24 +279,24 @@ export const App = () => {
 
     // --- ORDERS MODULE ---
     if (pathname === '/orders/create' || pathname === '/orders/new') {
-      if (!hasPermission('sales.create')) return <AccessRestricted onNavigate={navigate} />;
+      if (!hasPermission('orders.create')) return <AccessRestricted onNavigate={navigate} />;
       return <OrderCreatePage onNavigate={navigate} initialType={searchParams.get('type') || 'REGULAR'} />;
     }
     if (pathname === '/orders/calendar') {
-      if (!hasPermission('sales.view')) return <AccessRestricted onNavigate={navigate} />;
+      if (!hasPermission('orders.view')) return <AccessRestricted onNavigate={navigate} />;
       return <OrderCalendarPage onNavigate={navigate} />;
     }
     if (pathname === '/orders/advance') {
-      if (!hasPermission('sales.view')) return <AccessRestricted onNavigate={navigate} />;
+      if (!hasPermission('orders.view')) return <AccessRestricted onNavigate={navigate} />;
       return <AdvanceOrdersPage onNavigate={navigate} />;
     }
     if (pathname === '/orders/regular') {
-      if (!hasPermission('sales.view')) return <AccessRestricted onNavigate={navigate} />;
+      if (!hasPermission('orders.view')) return <AccessRestricted onNavigate={navigate} />;
       return <RegularOrdersPage onNavigate={navigate} />;
     }
     const orderDetailMatch = pathname.match(/^\/orders\/(\d+)$/);
     if (orderDetailMatch) {
-      if (!hasPermission('sales.view')) return <AccessRestricted onNavigate={navigate} />;
+      if (!hasPermission('orders.view')) return <AccessRestricted onNavigate={navigate} />;
       return <OrderDetailPage id={orderDetailMatch[1]} onNavigate={navigate} />;
     }
 

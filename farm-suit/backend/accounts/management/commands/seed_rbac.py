@@ -45,12 +45,17 @@ PERMISSIONS_DATA = [
     {"code": "inventory.delete", "name": "Delete Stock", "module": "Inventory", "description": "Can remove stock lots"},
     {"code": "inventory.stock_adjustment", "name": "Stock Adjustment", "module": "Inventory", "description": "Can perform manual stock ledger adjustments"},
 
-    # Sales & Orders
+    # Sales
     {"code": "sales.view", "name": "View Sales", "module": "Sales", "description": "Can view sales bills and transactions"},
     {"code": "sales.create", "name": "Create Sales", "module": "Sales", "description": "Can create new sales bills"},
     {"code": "sales.edit", "name": "Edit Sales", "module": "Sales", "description": "Can edit sales bills"},
     {"code": "sales.delete", "name": "Delete Sales", "module": "Sales", "description": "Can cancel or delete sales bills"},
-    {"code": "orders.edit", "name": "Edit Orders & Advance Bookings", "module": "Sales", "description": "Can edit existing regular and advance orders"},
+
+    # Orders
+    {"code": "orders.view", "name": "View Orders & Bookings", "module": "Orders", "description": "Can view regular orders, advance orders, and delivery calendar"},
+    {"code": "orders.create", "name": "Create Orders & Bookings", "module": "Orders", "description": "Can book regular orders and advance orders"},
+    {"code": "orders.edit", "name": "Edit Orders & Advance Bookings", "module": "Orders", "description": "Can edit existing regular and advance orders"},
+    {"code": "orders.delete", "name": "Delete Orders & Bookings", "module": "Orders", "description": "Can cancel or delete customer orders"},
 
     # Purchases
     {"code": "purchases.view", "name": "View Purchases", "module": "Purchases", "description": "Can view purchase bills and procurement"},
@@ -111,7 +116,8 @@ ROLES_DATA = {
             "dashboard.view",
             "farms.view", "farms.create", "farms.edit", "farms.delete",
             "crops.view", "crops.create", "crops.edit", "crops.delete",
-            "expenses.view", "expenses.create",
+            "orders.view",
+            "expenses.view", "expenses.create", "expenses.edit",
             "reports.view", "reports.export"
         ]
     },
@@ -121,6 +127,7 @@ ROLES_DATA = {
         "permissions": [
             "dashboard.view",
             "sales.view", "sales.create", "sales.edit",
+            "orders.view", "orders.edit",
             "purchases.view", "purchases.create", "purchases.edit",
             "invoices.view", "invoices.create", "invoices.edit", "invoices.download",
             "expenses.view", "expenses.create", "expenses.edit", "expenses.delete",
@@ -137,6 +144,7 @@ ROLES_DATA = {
             "dashboard.view",
             "customers.view", "customers.create", "customers.edit",
             "sales.view", "sales.create", "sales.edit",
+            "orders.view", "orders.create", "orders.edit",
             "invoices.view", "invoices.create", "invoices.download",
             "payments.view", "payments.create"
         ]

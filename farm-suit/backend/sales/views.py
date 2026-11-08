@@ -12,13 +12,15 @@ from utils.response import json_success, json_error
 from utils.decorators import api_login_required, parse_json_body
 from masters.views import paginate_queryset
 from .models import SalesBill, SalesPayment
-from .services.billing_service import save_sales_bill, post_sales_bill, reverse_sales_bill, record_sales_payment
+from .services.billing_service import save_sales_bill, post_sales_bill, reverse_sales_bill, record_sales_payment, update_sales_bill
 from .services.bill_pdf_service import generate_sales_bill_pdf
 
 @require_http_methods(["GET", "POST"])
 @api_login_required
 def sales_view(request):
     if request.method == "GET":
+        if not has_permission(request.user, "sales.view"):
+            return json_error("Forbidden: You do not have permission to view sales.", status=403)
         search = request.GET.get("search", "").strip()
         customer_id = request.GET.get("customer_id", "").strip()
         status = request.GET.get("status", "").strip().upper()
@@ -146,6 +148,8 @@ def sales_view(request):
         })
 
     elif request.method == "POST":
+        if not has_permission(request.user, "sales.create"):
+            return json_error("Forbidden: You do not have permission to create sales bills.", status=403)
         data = parse_json_body(request)
         if not data:
             return json_error("Invalid JSON body", status=400)
@@ -194,6 +198,8 @@ def sales_view(request):
 @require_http_methods(["GET", "PUT", "DELETE"])
 @api_login_required
 def sales_detail_view(request, pk):
+    if request.method == "GET" and not has_permission(request.user, "sales.view"):
+        return json_error("Forbidden: You do not have permission to view sales.", status=403)
     try:
         bill = SalesBill.objects.select_related('customer', 'created_by').prefetch_related(
             'lines__item', 'lines__item__unit', 'lines__inventory_lot', 'payments__recorded_by'
@@ -289,19 +295,22 @@ def sales_detail_view(request, pk):
         })
 
     elif request.method == "PUT":
+        if not has_permission(request.user, "sales.edit"):
+            return json_error("Forbidden: You do not have permission to edit sales bills.", status=403)
+
         data = parse_json_body(request)
         if not data:
             return json_error("Invalid JSON body", status=400)
 
         try:
-            bill = save_sales_bill(data, request.user, bill_id=pk)
+            bill = update_sales_bill(pk, data, request.user)
             return json_success({
                 "id": bill.id,
                 "bill_number": bill.bill_number,
                 "sale_type": bill.sale_type,
                 "grand_total": str(bill.grand_total),
                 "status": bill.status
-            }, message="Sales bill draft updated successfully")
+            }, message=f"Sales bill {bill.bill_number} updated successfully")
         except ValidationError as e:
             return json_error(
                 message="Validation failed",
@@ -426,6 +435,8 @@ def sales_payments_view(request, pk):
         })
 
     elif request.method == "POST":
+        if not has_permission(request.user, "sales.create"):
+            return json_error("Forbidden: You do not have permission to create sales bills.", status=403)
         data = parse_json_body(request)
         if not data:
             return json_error("Invalid JSON body", status=400)

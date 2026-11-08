@@ -397,3 +397,178 @@ def record_sales_payment(bill_id, payment_data, user):
     )
 
     return payment, bill
+
+
+@transaction.atomic
+def update_sales_bill(bill_id, data, user):
+    """
+    Authoritative update for an existing sales bill.
+    Supports both DRAFT and POSTED bills.
+    """
+    try:
+        bill = SalesBill.objects.select_for_update().get(pk=bill_id)
+    except SalesBill.DoesNotExist:
+        raise ValidationError("Sales bill not found")
+
+    if bill.status == 'DRAFT':
+        return save_sales_bill(data, user, bill_id=bill_id)
+
+    if bill.status != 'POSTED':
+        raise ValidationError(f"Cannot edit sales bill with status '{bill.status}'")
+
+    old_values = {
+        "bill_number": bill.bill_number,
+        "customer": bill.customer.customer_name,
+        "bill_date": str(bill.bill_date),
+        "grand_total": str(bill.grand_total),
+        "discount": str(bill.discount),
+        "remarks": bill.remarks
+    }
+
+    customer_id = data.get("customer_id")
+    if customer_id and str(customer_id) != str(bill.customer_id):
+        try:
+            bill.customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            raise ValidationError({"customer_id": ["Selected customer does not exist"]})
+
+    if data.get("bill_date"):
+        bill.bill_date = data["bill_date"]
+
+    if "remarks" in data:
+        bill.remarks = str(data["remarks"]).strip()
+
+    if "transport_cost" in data:
+        bill.transport_cost = Decimal(str(data["transport_cost"] or "0"))
+    if "packaging_cost" in data:
+        bill.packaging_cost = Decimal(str(data["packaging_cost"] or "0"))
+    if "other_selling_expenses" in data:
+        bill.other_selling_expenses = Decimal(str(data["other_selling_expenses"] or "0"))
+
+    if "discount" in data:
+        try:
+            bill.discount = Decimal(str(data["discount"] or "0"))
+            if bill.discount < Decimal('0.00'):
+                bill.discount = Decimal('0.00')
+        except (ValueError, TypeError, InvalidOperation):
+            raise ValidationError({"discount": ["Discount must be a valid non-negative number"]})
+
+    items_data = data.get("items")
+    if items_data is not None and len(items_data) > 0:
+        if bill.amount_paid > Decimal('0.00'):
+            raise ValidationError(
+                f"Cannot modify item lines on bill {bill.bill_number}: Active customer payments amounting to ₹{bill.amount_paid} are recorded. Please delete or adjust payments first."
+            )
+
+        for line in bill.lines.select_related('inventory_lot').all():
+            lot = line.inventory_lot
+            lot.available_quantity += line.quantity
+            if lot.status == 'DEPLETED':
+                lot.status = 'AVAILABLE'
+            lot.save()
+
+            StockMovement.objects.create(
+                inventory_lot=lot,
+                movement_type='REVERSAL',
+                quantity=line.quantity,
+                reference_type='SALES_BILL',
+                reference_id=bill.id,
+                created_by=user,
+                remarks=f"Stock lot restored during edit of Sales Bill {bill.bill_number}"
+            )
+        bill.lines.all().delete()
+
+        new_subtotal = Decimal('0.00')
+        for it in items_data:
+            item_id = it.get("item_id")
+            if not item_id:
+                raise ValidationError("Item is required for each line")
+            try:
+                item = Item.objects.get(pk=item_id)
+            except (Item.DoesNotExist, ValueError, TypeError):
+                raise ValidationError(f"Item with id {item_id} does not exist")
+
+            try:
+                qty_needed = Decimal(str(it.get("quantity") or "0"))
+                selling_rate = Decimal(str(it.get("selling_rate") or "0"))
+                if qty_needed <= 0 or selling_rate < 0:
+                    raise ValueError
+            except (ValueError, TypeError, InvalidOperation):
+                raise ValidationError(f"Invalid quantity or selling rate for item {item.name}")
+
+            available_lots = InventoryLot.objects.select_for_update().filter(
+                item=item,
+                status='AVAILABLE',
+                available_quantity__gt=0
+            ).order_by('received_date', 'id')
+
+            total_avail = available_lots.aggregate(total=Sum('available_quantity'))['total'] or Decimal('0.000')
+            if total_avail < qty_needed:
+                raise ValidationError(
+                    f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
+                )
+
+            qty_remaining = qty_needed
+            for lot in available_lots:
+                if qty_remaining <= Decimal('0.000'):
+                    break
+                qty_from_lot = min(lot.available_quantity, qty_remaining)
+                lot.available_quantity -= qty_from_lot
+                if lot.available_quantity == Decimal('0.000'):
+                    lot.status = 'DEPLETED'
+                lot.save()
+
+                line_revenue = (qty_from_lot * selling_rate).quantize(Decimal('0.01'))
+                line_cogs = (qty_from_lot * lot.unit_cost).quantize(Decimal('0.01'))
+                line_profit = line_revenue - line_cogs
+                new_subtotal += line_revenue
+
+                StockMovement.objects.create(
+                    inventory_lot=lot,
+                    movement_type='SALE',
+                    quantity=qty_from_lot,
+                    reference_type='SALES_BILL',
+                    reference_id=bill.id,
+                    created_by=user,
+                    remarks=f"Sale to {bill.customer.customer_name} via updated Bill {bill.bill_number}"
+                )
+
+                SalesLine.objects.create(
+                    sales_bill=bill,
+                    item=item,
+                    inventory_lot=lot,
+                    quantity=qty_from_lot,
+                    selling_rate=selling_rate,
+                    revenue=line_revenue,
+                    cost_of_goods_sold=line_cogs,
+                    gross_profit=line_profit
+                )
+                qty_remaining -= qty_from_lot
+
+        bill.subtotal = new_subtotal
+
+    grand_total = (bill.subtotal - bill.discount).quantize(Decimal('0.01'))
+    if grand_total < Decimal('0.00'):
+        grand_total = Decimal('0.00')
+    bill.grand_total = grand_total
+    bill.save()
+    bill.update_payment_status()
+
+    record_audit(
+        user=user,
+        model_name="SalesBill",
+        object_id=bill.id,
+        action="UPDATE",
+        old_values=old_values,
+        new_values={
+            "bill_number": bill.bill_number,
+            "customer": bill.customer.customer_name,
+            "bill_date": str(bill.bill_date),
+            "grand_total": str(bill.grand_total),
+            "discount": str(bill.discount),
+            "remarks": bill.remarks
+        },
+        description=f"Updated Sales Bill {bill.bill_number}"
+    )
+
+    return bill

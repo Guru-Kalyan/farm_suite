@@ -18,6 +18,7 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
 
   const [confirmReverseOpen, setConfirmReverseOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
   const fetchDetail = useCallback(async () => {
@@ -131,6 +132,13 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
 
           {/* WhatsApp Share Button */}
           <WhatsAppShareButton bill={bill} type={isTrade ? 'trade_sale' : 'sales'} variant="button" />
+
+          {/* Edit Invoice Button */}
+          {hasPermission('sales.edit') && bill.status !== 'CANCELLED' && bill.status !== 'REVERSED' && (
+            <Button variant="ghost" onClick={() => setIsEditModalOpen(true)} title="Edit Invoice Details">
+              ✏️ Edit Invoice
+            </Button>
+          )}
 
           {/* Download PDF Button */}
           <Button variant="ghost" onClick={handleDownload} title="Download official PDF invoice">

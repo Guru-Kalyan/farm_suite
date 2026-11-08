@@ -9,6 +9,7 @@ import { Select } from '../../components/common/Select';
 import { KpiCard } from '../../components/common/KpiCard';
 import { DataTable } from '../../components/common/DataTable';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { ExpenseEditModal } from '../../components/accounts/ExpenseEditModal';
 
 const EXPENSE_TYPES = [
   { value: '', label: 'All Categories' },
@@ -59,6 +60,7 @@ export const ExpenseHistoryPage = ({ onNavigate }) => {
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Preset Date Handlers
@@ -235,6 +237,16 @@ export const ExpenseHistoryPage = ({ onNavigate }) => {
       width: '100px',
       render: (_, row) => (
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          {hasPermission('expenses.edit') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingExpense(row)}
+              title="Edit Expenditure"
+            >
+              ✏️ Edit
+            </Button>
+          )}
           {hasPermission('expenses.delete') && (
             <Button
               variant="ghost"

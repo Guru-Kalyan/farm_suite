@@ -8,6 +8,7 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { Pagination } from '../../components/common/Pagination';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { InvoiceEditModal } from '../../components/sales/InvoiceEditModal';
 import { WhatsAppShareButton } from '../../components/common/WhatsAppShareButton';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadSalesBillPdf } from '../../utils/pdfDownload';
@@ -18,6 +19,7 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editingBill, setEditingBill] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [sales, setSales] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -211,6 +213,20 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
           <Button variant="ghost" size="sm" onClick={() => onNavigate(`/sales/${row.id}`)}>
             View →
           </Button>
+
+          {hasPermission('sales.edit') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingBill(row);
+              }}
+              title="Edit Invoice"
+            >
+              ✏️ Edit
+            </Button>
+          )}
 
           {hasPermission('sales.delete') && (
             <Button
@@ -524,6 +540,16 @@ export const SalesListPage = ({ onNavigate, onOpenAudit }) => {
       />
 
       <Pagination pagination={pagination} onPageChange={fetchSales} />
+
+      {/* Edit Invoice Modal */}
+      {editingBill && (
+        <InvoiceEditModal
+          isOpen={Boolean(editingBill)}
+          bill={editingBill}
+          onClose={() => setEditingBill(null)}
+          onSuccess={fetchSales}
+        />
+      )}
 
       {/* Delete Confirmation */}
       {deleteTarget && (

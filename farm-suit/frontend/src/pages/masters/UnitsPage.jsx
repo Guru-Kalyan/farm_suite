@@ -16,6 +16,7 @@ export const UnitsPage = ({ onOpenAudit }) => {
   const [loading, setLoading] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUnit, setEditingUnit] = useState(null);
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -44,8 +45,17 @@ export const UnitsPage = ({ onOpenAudit }) => {
   }, []);
 
   const handleOpenCreate = () => {
+    setEditingUnit(null);
     setName('');
     setShortName('');
+    setError('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (unit) => {
+    setEditingUnit(unit);
+    setName(unit.name);
+    setShortName(unit.short_name);
     setError('');
     setIsModalOpen(true);
   };
@@ -60,12 +70,18 @@ export const UnitsPage = ({ onOpenAudit }) => {
     try {
       setSubmitting(true);
       setError('');
-      await mastersApi.createUnit({ name: name.trim(), short_name: shortName.trim() });
-      addToast('Unit created successfully', 'success');
+      if (editingUnit) {
+        await mastersApi.updateUnit(editingUnit.id, { name: name.trim(), short_name: shortName.trim() });
+        addToast(`Unit '${name.trim()}' updated successfully`, 'success');
+      } else {
+        await mastersApi.createUnit({ name: name.trim(), short_name: shortName.trim() });
+        addToast('Unit created successfully', 'success');
+      }
       setIsModalOpen(false);
+      setEditingUnit(null);
       fetchUnits();
     } catch (err) {
-      setError(err.message || 'Failed to create unit');
+      setError(err.message || 'Failed to save unit');
       addToast(err.message || 'Operation failed', 'error');
     } finally {
       setSubmitting(false);
@@ -125,6 +141,15 @@ export const UnitsPage = ({ onOpenAudit }) => {
       align: 'right',
       render: (_, row) => (
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          {hasPermission('inventory.edit') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleOpenEdit(row)}
+            >
+              ✏️ Edit
+            </Button>
+          )}
           {hasPermission('inventory.delete') && (
             <Button
               variant="ghost"
@@ -159,12 +184,12 @@ export const UnitsPage = ({ onOpenAudit }) => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Add Unit of Measure"
+        title={editingUnit ? "Edit Unit of Measure" : "Add Unit of Measure"}
         maxWidth="400px"
         footer={
           <div style={{ display: 'flex', gap: '8px' }}>
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={submitting}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit} loading={submitting}>Create Unit</Button>
+            <Button variant="primary" onClick={handleSubmit} loading={submitting}>{editingUnit ? "Save Changes" : "Create Unit"}</Button>
           </div>
         }
       >

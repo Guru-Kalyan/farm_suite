@@ -5,9 +5,13 @@ import { Button } from '../../components/common/Button';
 import { Pagination } from '../../components/common/Pagination';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
+import { InvoiceEditModal } from '../../components/sales/InvoiceEditModal';
 
 export const SalesReportPage = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
+  const [editingBill, setEditingBill] = useState(null);
   const [sales, setSales] = useState([]);
   const [totalRevenue, setTotalRevenue] = useState('0.00');
   const [pagination, setPagination] = useState(null);
@@ -57,7 +61,26 @@ export const SalesReportPage = ({ onNavigate }) => {
     { key: 'bill_date', header: 'Date', render: (val) => formatDate(val) },
     { key: 'subtotal', header: 'Subtotal', render: (val) => formatCurrency(val) },
     { key: 'discount', header: 'Discount', render: (val) => formatCurrency(val) },
-    { key: 'grand_total', header: 'Grand Total', render: (val) => <span style={{ fontWeight: '800' }}>{formatCurrency(val)}</span> }
+    { key: 'grand_total', header: 'Grand Total', render: (val) => <span style={{ fontWeight: '800' }}>{formatCurrency(val)}</span> },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (_, row) => (
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          {hasPermission('sales.edit') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingBill(row)}
+              title="Edit Invoice"
+            >
+              ✏️ Edit
+            </Button>
+          )}
+        </div>
+      )
+    }
   ];
 
   return (
@@ -137,6 +160,15 @@ export const SalesReportPage = ({ onNavigate }) => {
 
       <DataTable columns={columns} data={sales} loading={loading} emptyMessage="No sales recorded for this period." />
       <Pagination pagination={pagination} onPageChange={fetchReport} />
+
+      {editingBill && (
+        <InvoiceEditModal
+          isOpen={Boolean(editingBill)}
+          bill={editingBill}
+          onClose={() => setEditingBill(null)}
+          onSuccess={() => fetchReport(pagination?.page || 1)}
+        />
+      )}
     </div>
   );
 };
