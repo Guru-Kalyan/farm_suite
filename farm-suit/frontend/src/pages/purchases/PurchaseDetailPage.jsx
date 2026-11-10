@@ -357,11 +357,14 @@ export const PurchaseDetailPage = ({ id, onNavigate, onOpenAudit }) => {
       <RecordPaymentModal
         isOpen={paymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
-        onSubmit={handleRecordPayment}
-        billNumber={bill.bill_number}
+        bill={bill}
+        type="purchase"
         partyName={bill.vendor?.vendor_name}
+        billNumber={bill.bill_number}
         balancePayable={balancePayable}
         title={`Record Payment to ${bill.vendor?.vendor_name}`}
+        onSubmit={handleRecordPayment}
+        loading={actionLoading}
       />
 
       {/* Confirmation Dialogs */}

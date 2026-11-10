@@ -368,6 +368,8 @@ export const OrderDetailPage = ({ id, onNavigate }) => {
         billNumber={order.order_number}
         partyName={order.customer?.name}
         balancePayable={remainingExpected}
+        totalAmount={order.total_amount}
+        type="sales"
         title={`Record Advance Payment for ${order.order_number}`}
       />
 

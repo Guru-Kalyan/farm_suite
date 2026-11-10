@@ -132,7 +132,8 @@ export const SalesCreatePage = ({ onNavigate }) => {
       return;
     }
 
-    // Check available stock in frontend before sending
+    /*
+    // Temporarily disabled stock limit check as requested (can be re-enabled later)
     for (let i = 0; i < lines.length; i++) {
       const q = parseFloat(lines[i].quantity) || 0;
       const avail = parseFloat(lines[i].available_stock) || 0;
@@ -141,6 +142,7 @@ export const SalesCreatePage = ({ onNavigate }) => {
         return;
       }
     }
+    */
 
     const payload = {
       customer_id: customerId,
@@ -416,7 +418,7 @@ export const SalesCreatePage = ({ onNavigate }) => {
                         value={line.quantity}
                         onChange={(e) => handleLineFieldChange(idx, 'quantity', e.target.value)}
                         suffix={line.unit}
-                        error={isOverStock ? 'Exceeds stock!' : null}
+                        error={null /* Temporarily disabled: isOverStock ? 'Exceeds stock!' : null */}
                       />
                     </td>
 

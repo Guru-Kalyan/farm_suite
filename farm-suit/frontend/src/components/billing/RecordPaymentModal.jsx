@@ -11,7 +11,12 @@ export const RecordPaymentModal = ({
   bill,
   type = 'sales', // 'sales' or 'purchase'
   onSubmit,
-  loading = false
+  loading = false,
+  billNumber: propBillNumber,
+  partyName: propPartyName,
+  balancePayable: propBalancePayable,
+  totalAmount: propTotalAmount,
+  title: propTitle
 }) => {
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [amount, setAmount] = useState('');
@@ -20,10 +25,26 @@ export const RecordPaymentModal = ({
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
-  const remaining = parseFloat(bill?.remaining_balance || 0);
+  const effectiveType = type || (bill?.vendor ? 'purchase' : 'sales');
+  const isSales = effectiveType === 'sales';
+
+  const partyLabel = isSales ? 'Customer' : 'Vendor';
+  const partyName = propPartyName || (isSales ? (bill?.customer?.customer_name || bill?.customer?.name) : (bill?.vendor?.vendor_name || bill?.vendor?.name)) || '—';
+
+  const billNo = bill?.bill_number || bill?.order_number || propBillNumber || '';
+
+  const totalPayable = propTotalAmount !== undefined
+    ? parseFloat(propTotalAmount || 0)
+    : parseFloat(bill?.grand_total ?? bill?.total_amount ?? 0);
+
+  const alreadyPaid = parseFloat(bill?.amount_paid ?? bill?.advance_amount ?? 0);
+
+  const remaining = propBalancePayable !== undefined
+    ? parseFloat(propBalancePayable || 0)
+    : parseFloat(bill?.remaining_balance ?? (totalPayable - alreadyPaid));
 
   useEffect(() => {
-    if (isOpen && bill) {
+    if (isOpen) {
       setAmount(String(remaining > 0 ? remaining : ''));
       setPaymentDate(new Date().toISOString().split('T')[0]);
       setPaymentMethod('UPI');
@@ -40,7 +61,7 @@ export const RecordPaymentModal = ({
       setError('Please enter a valid payment amount greater than zero.');
       return;
     }
-    if (val > remaining) {
+    if (remaining > 0 && val > remaining) {
       setError(`Payment amount cannot exceed remaining balance of ${formatCurrency(remaining)}.`);
       return;
     }
@@ -55,15 +76,13 @@ export const RecordPaymentModal = ({
     });
   };
 
-  const isSales = type === 'sales';
-  const partyLabel = isSales ? 'Customer' : 'Vendor';
-  const partyName = isSales ? bill?.customer?.customer_name : bill?.vendor?.vendor_name;
+  const modalTitle = propTitle || (isSales ? `Record Payment — ${billNo}` : `Record Vendor Payment — ${billNo}`);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Record Payment — ${bill?.bill_number || ''}`}
+      title={modalTitle}
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Bill summary card */}
@@ -79,15 +98,15 @@ export const RecordPaymentModal = ({
         }}>
           <div>
             <div style={{ color: 'var(--text-muted)' }}>{partyLabel}:</div>
-            <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{partyName || '—'}</div>
+            <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{partyName}</div>
           </div>
           <div>
             <div style={{ color: 'var(--text-muted)' }}>Total Payable:</div>
-            <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{formatCurrency(bill?.grand_total)}</div>
+            <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{formatCurrency(totalPayable)}</div>
           </div>
           <div>
             <div style={{ color: 'var(--text-muted)' }}>Already Paid:</div>
-            <div style={{ fontWeight: '700', color: 'var(--success-text)' }}>{formatCurrency(bill?.amount_paid)}</div>
+            <div style={{ fontWeight: '700', color: 'var(--success-text)' }}>{formatCurrency(alreadyPaid)}</div>
           </div>
           <div>
             <div style={{ color: 'var(--text-muted)' }}>Balance Remaining:</div>
@@ -131,7 +150,7 @@ export const RecordPaymentModal = ({
               type="number"
               step="0.01"
               min="0.01"
-              max={remaining}
+              max={remaining > 0 ? remaining : undefined}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
@@ -198,7 +217,7 @@ export const RecordPaymentModal = ({
           <Button variant="ghost" onClick={onClose} disabled={loading} type="button">
             Cancel
           </Button>
-          <Button variant="primary" type="submit" disabled={loading || remaining <= 0}>
+          <Button variant="primary" type="submit" disabled={loading || (remaining <= 0 && !amount)}>
             {loading ? 'Recording...' : `Record ${formatCurrency(amount || 0)} Payment`}
           </Button>
         </div>

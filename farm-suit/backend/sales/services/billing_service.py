@@ -191,12 +191,13 @@ def post_sales_bill(bill_id, items_data, user):
 
         total_avail = available_lots.aggregate(total=Sum('available_quantity'))['total'] or Decimal('0.000')
 
-        if total_avail < qty_needed:
-            raise ValidationError(
-                f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
-            )
+        # Temporarily commented out strict stock limit check as requested (can be re-enabled later):
+        # if total_avail < qty_needed:
+        #     raise ValidationError(
+        #         f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
+        #     )
 
-        # FIFO consumption
+        # FIFO consumption from available lots
         qty_remaining = qty_needed
         for lot in available_lots:
             if qty_remaining <= Decimal('0.000'):
@@ -240,6 +241,50 @@ def post_sales_bill(bill_id, items_data, user):
             created_lines.append(sl)
 
             qty_remaining -= qty_from_lot
+
+        # If requested quantity exceeds available stock lots (or zero stock exists):
+        if qty_remaining > Decimal('0.000'):
+            open_lot_no = f"LOT-OPEN-{item.id}"
+            open_lot = InventoryLot.objects.filter(lot_number=open_lot_no).first()
+            if not open_lot:
+                open_lot = InventoryLot.objects.create(
+                    lot_number=open_lot_no,
+                    item=item,
+                    source_type='HARVEST',
+                    original_quantity=qty_remaining,
+                    available_quantity=Decimal('0.000'),
+                    unit_cost=Decimal('0.00'),
+                    status='DEPLETED'
+                )
+
+            line_revenue = (qty_remaining * selling_rate).quantize(Decimal('0.01'))
+            line_cogs = Decimal('0.00')
+            line_profit = line_revenue
+
+            subtotal += line_revenue
+            total_cogs += line_cogs
+
+            StockMovement.objects.create(
+                inventory_lot=open_lot,
+                movement_type='SALE',
+                quantity=qty_remaining,
+                reference_type='SALES_BILL',
+                reference_id=bill.id,
+                created_by=user,
+                remarks=f"Sale to {bill.customer.customer_name} via Bill {bill.bill_number} (Unstocked/Direct fulfillment)"
+            )
+
+            sl = SalesLine.objects.create(
+                sales_bill=bill,
+                item=item,
+                inventory_lot=open_lot,
+                quantity=qty_remaining,
+                selling_rate=selling_rate,
+                revenue=line_revenue,
+                cost_of_goods_sold=line_cogs,
+                gross_profit=line_profit
+            )
+            created_lines.append(sl)
 
     bill.tax_amount = Decimal('0.00')
     grand_total = (subtotal - bill.discount).quantize(Decimal('0.01'))
@@ -503,10 +548,11 @@ def update_sales_bill(bill_id, data, user):
             ).order_by('received_date', 'id')
 
             total_avail = available_lots.aggregate(total=Sum('available_quantity'))['total'] or Decimal('0.000')
-            if total_avail < qty_needed:
-                raise ValidationError(
-                    f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
-                )
+            # Temporarily commented out strict stock limit check as requested:
+            # if total_avail < qty_needed:
+            #     raise ValidationError(
+            #         f"Insufficient stock for {item.name}. Requested: {qty_needed} {item.unit.short_name}, Available: {total_avail} {item.unit.short_name}."
+            #     )
 
             qty_remaining = qty_needed
             for lot in available_lots:
@@ -544,6 +590,46 @@ def update_sales_bill(bill_id, data, user):
                     gross_profit=line_profit
                 )
                 qty_remaining -= qty_from_lot
+
+            if qty_remaining > Decimal('0.000'):
+                open_lot_no = f"LOT-OPEN-{item.id}"
+                open_lot = InventoryLot.objects.filter(lot_number=open_lot_no).first()
+                if not open_lot:
+                    open_lot = InventoryLot.objects.create(
+                        lot_number=open_lot_no,
+                        item=item,
+                        source_type='HARVEST',
+                        original_quantity=qty_remaining,
+                        available_quantity=Decimal('0.000'),
+                        unit_cost=Decimal('0.00'),
+                        status='DEPLETED'
+                    )
+
+                line_revenue = (qty_remaining * selling_rate).quantize(Decimal('0.01'))
+                line_cogs = Decimal('0.00')
+                line_profit = line_revenue
+                new_subtotal += line_revenue
+
+                StockMovement.objects.create(
+                    inventory_lot=open_lot,
+                    movement_type='SALE',
+                    quantity=qty_remaining,
+                    reference_type='SALES_BILL',
+                    reference_id=bill.id,
+                    created_by=user,
+                    remarks=f"Sale to {bill.customer.customer_name} via updated Bill {bill.bill_number} (Unstocked/Direct fulfillment)"
+                )
+
+                SalesLine.objects.create(
+                    sales_bill=bill,
+                    item=item,
+                    inventory_lot=open_lot,
+                    quantity=qty_remaining,
+                    selling_rate=selling_rate,
+                    revenue=line_revenue,
+                    cost_of_goods_sold=line_cogs,
+                    gross_profit=line_profit
+                )
 
         bill.subtotal = new_subtotal
 
