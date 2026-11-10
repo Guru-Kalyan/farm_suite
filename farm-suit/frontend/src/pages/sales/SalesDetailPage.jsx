@@ -9,8 +9,10 @@ import { RecordPaymentModal } from '../../components/billing/RecordPaymentModal'
 import { downloadSalesBillPdf } from '../../utils/pdfDownload';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
 
 export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
+  const { hasPermission } = useAuth();
   const { addToast } = useToast();
   const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(true);
