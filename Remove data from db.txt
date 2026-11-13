@@ -1,0 +1,9 @@
+to remove all the data in the data base:-
+   
+     py manage.py flush
+
+to add the roles and other configuration:-
+
+	python manage.py seed_rbac
+
+python manage.py shell -c "from django.contrib.auth.models import User; from accounts.models import UserProfile, Role; u, _ = User.objects.get_or_create(username='admin', defaults={'email': 'gurukalyan786@gmail.com'}); u.email = 'gurukalyan786@gmail.com'; u.set_password('farm123'); u.is_staff = True; u.is_superuser = True; u.save(); admin_role = Role.objects.get(name='Admin'); UserProfile.objects.update_or_create(user=u, defaults={'role': admin_role, 'employee_id': 'EMP-001', 'phone': '+91 99999 99999'}); print('>>> Admin created and linked successfully')"

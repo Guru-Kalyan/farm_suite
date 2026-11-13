@@ -112,6 +112,8 @@ def sales_view(request):
             "unpaid_bills": status_counts['unpaid'] or 0,
         }
 
+        # Enforce descending ordering so the last entry is always on top
+        qs = qs.order_by('-id')
         paginated = paginate_queryset(qs, request)
         data = [{
             "id": b.id,

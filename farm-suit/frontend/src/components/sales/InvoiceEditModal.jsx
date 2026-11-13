@@ -24,6 +24,7 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
   const [transportCost, setTransportCost] = useState('0.00');
   const [packagingCost, setPackagingCost] = useState('0.00');
   const [otherSellingExpenses, setOtherSellingExpenses] = useState('0.00');
+  const [lines, setLines] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Load customer master
@@ -48,11 +49,26 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
           setBillData(b);
           setBillDate(b.bill_date ? String(b.bill_date).split('T')[0] : '');
           setCustomerId(b.customer?.id ? String(b.customer.id) : '');
-          setDiscount(b.discount ? String(b.discount) : '0.00');
+          setDiscount(b.discount !== undefined ? String(b.discount) : '0.00');
           setRemarks(b.remarks || '');
-          setTransportCost(b.transport_cost ? String(b.transport_cost) : '0.00');
-          setPackagingCost(b.packaging_cost ? String(b.packaging_cost) : '0.00');
-          setOtherSellingExpenses(b.other_selling_expenses ? String(b.other_selling_expenses) : '0.00');
+          setTransportCost(b.transport_cost !== undefined ? String(b.transport_cost) : '0.00');
+          setPackagingCost(b.packaging_cost !== undefined ? String(b.packaging_cost) : '0.00');
+          setOtherSellingExpenses(b.other_selling_expenses !== undefined ? String(b.other_selling_expenses) : '0.00');
+
+          const loadedLines = (b.lines || []).map(l => {
+            const q = l.quantity !== undefined ? parseFloat(l.quantity) : 0;
+            const r = l.selling_rate !== undefined ? parseFloat(l.selling_rate) : 0;
+            return {
+              id: l.id,
+              item_id: l.item?.id,
+              item_name: l.item?.name || 'Item',
+              unit: l.item?.unit || '',
+              quantity: String(q),
+              selling_rate: String(r),
+              amount: (q * r).toFixed(2)
+            };
+          });
+          setLines(loadedLines);
         })
         .catch(err => {
           setErrorMsg(err.message || 'Failed to load bill details');
@@ -63,8 +79,42 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
     }
   }, [isOpen, bill]);
 
+  // Handle line item field changes
+  const handleLineChange = (index, field, value) => {
+    setLines(prev => {
+      const updated = [...prev];
+      const line = { ...updated[index], [field]: value };
+
+      if (field === 'quantity' || field === 'selling_rate') {
+        const q = parseFloat(field === 'quantity' ? value : line.quantity) || 0;
+        const r = parseFloat(field === 'selling_rate' ? value : line.selling_rate) || 0;
+        line.amount = (q * r).toFixed(2);
+      } else if (field === 'amount') {
+        const a = parseFloat(value) || 0;
+        const q = parseFloat(line.quantity) || 0;
+        if (q > 0) {
+          line.selling_rate = (a / q).toFixed(2);
+        }
+      }
+      updated[index] = line;
+      return updated;
+    });
+  };
+
+  // Live total calculations
+  const currentSubtotal = lines.reduce((sum, l) => {
+    const q = parseFloat(l.quantity) || 0;
+    const r = parseFloat(l.selling_rate) || 0;
+    return sum + (q * r);
+  }, 0);
+
+  const discountNum = parseFloat(discount) || 0;
+  const currentGrandTotal = Math.max(0, currentSubtotal - discountNum);
+  const amountPaidNum = parseFloat(billData?.amount_paid || bill?.amount_paid || 0);
+  const currentBalance = Math.max(0, currentGrandTotal - amountPaidNum);
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!billData) return;
 
     if (!billDate) {
@@ -76,6 +126,20 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
       return;
     }
 
+    // Validate line items
+    for (let i = 0; i < lines.length; i++) {
+      const q = parseFloat(lines[i].quantity);
+      const r = parseFloat(lines[i].selling_rate);
+      if (isNaN(q) || q <= 0) {
+        setErrorMsg(`Line ${i + 1} (${lines[i].item_name}): Quantity must be greater than 0`);
+        return;
+      }
+      if (isNaN(r) || r < 0) {
+        setErrorMsg(`Line ${i + 1} (${lines[i].item_name}): Selling rate cannot be negative`);
+        return;
+      }
+    }
+
     try {
       setSaving(true);
       setErrorMsg('');
@@ -83,8 +147,13 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
       const payload = {
         bill_date: billDate,
         customer_id: customerId,
-        discount: parseFloat(discount) || 0,
-        remarks: remarks.trim()
+        discount: discountNum,
+        remarks: remarks.trim(),
+        items: lines.map(l => ({
+          item_id: l.item_id,
+          quantity: parseFloat(l.quantity) || 0,
+          selling_rate: parseFloat(l.selling_rate) || 0
+        }))
       };
 
       if (billData.sale_type === 'TRADE') {
@@ -107,14 +176,13 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
   };
 
   const isTrade = billData?.sale_type === 'TRADE' || bill?.sale_type === 'TRADE';
-  const amountPaidNum = parseFloat(billData?.amount_paid || bill?.amount_paid || 0);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={`Edit Invoice: ${billData?.bill_number || bill?.bill_number || ''}`}
-      maxWidth="680px"
+      maxWidth="750px"
       footer={
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
           <Button variant="ghost" onClick={onClose} disabled={saving}>
@@ -162,10 +230,10 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
                 </span>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <span>Total: <b>{formatCurrency(billData?.grand_total || bill?.grand_total || 0)}</b></span>
+            <div style={{ display: 'flex', gap: '14px' }}>
+              <span>Total: <b style={{ color: 'var(--primary)' }}>{formatCurrency(currentGrandTotal)}</b></span>
               <span>Paid: <b style={{ color: 'var(--success)' }}>{formatCurrency(amountPaidNum)}</b></span>
-              <span>Bal: <b style={{ color: 'var(--danger)' }}>{formatCurrency(billData?.remaining_balance || bill?.remaining_balance || 0)}</b></span>
+              <span>Bal: <b style={{ color: currentBalance > 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(currentBalance)}</b></span>
             </div>
           </div>
 
@@ -269,11 +337,21 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
             </div>
           )}
 
-          {/* Lines summary (Read-only view of products in invoice) */}
-          {billData?.lines && billData.lines.length > 0 && (
+          {/* Editable Lines Section */}
+          {lines && lines.length > 0 && (
             <div>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                INVOICE LINE ITEMS ({billData.lines.length})
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '6px'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>
+                  INVOICE LINE ITEMS ({lines.length}) — EDIT QUANTITY & RATE
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Line total updates automatically
+                </div>
               </div>
               <div style={{
                 border: '1px solid var(--border-subtle)',
@@ -284,21 +362,94 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
                   <thead>
                     <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
                       <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Qty</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Rate (₹)</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Amount (₹)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Qty</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Rate (₹)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {billData.lines.map((l, idx) => (
+                    {lines.map((l, idx) => (
                       <tr key={l.id || idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '8px 12px' }}>{l.item?.name}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{l.quantity} {l.item?.unit}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>₹{l.selling_rate}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '700' }}>₹{l.revenue || (parseFloat(l.quantity) * parseFloat(l.selling_rate)).toFixed(2)}</td>
+                        <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{l.item_name}</div>
+                          {l.unit && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              Unit: {l.unit}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0.001"
+                            value={l.quantity}
+                            onChange={(e) => handleLineChange(idx, 'quantity', e.target.value)}
+                            style={{
+                              width: '100%',
+                              textAlign: 'right',
+                              padding: '6px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              border: '1px solid var(--border-subtle)',
+                              backgroundColor: 'var(--bg-surface)',
+                              color: 'var(--text-primary)',
+                              fontSize: '12.5px',
+                              fontWeight: '600'
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={l.selling_rate}
+                            onChange={(e) => handleLineChange(idx, 'selling_rate', e.target.value)}
+                            style={{
+                              width: '100%',
+                              textAlign: 'right',
+                              padding: '6px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              border: '1px solid var(--border-subtle)',
+                              backgroundColor: 'var(--bg-surface)',
+                              color: 'var(--text-primary)',
+                              fontSize: '12.5px',
+                              fontWeight: '600'
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={l.amount}
+                            onChange={(e) => handleLineChange(idx, 'amount', e.target.value)}
+                            style={{
+                              width: '100%',
+                              textAlign: 'right',
+                              padding: '6px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              border: '1px solid var(--border-subtle)',
+                              backgroundColor: 'var(--bg-surface)',
+                              color: 'var(--text-primary)',
+                              fontSize: '12.5px',
+                              fontWeight: '700'
+                            }}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', fontWeight: '700' }}>
+                      <td style={{ padding: '8px 12px' }}>Total Subtotal</td>
+                      <td colSpan="2"></td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--primary)' }}>
+                        {formatCurrency(currentSubtotal)}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
@@ -308,4 +459,3 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
     </Modal>
   );
 };
-

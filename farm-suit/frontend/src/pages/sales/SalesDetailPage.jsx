@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { AuditTooltip } from '../../components/audit/AuditTooltip';
 import { WhatsAppShareButton } from '../../components/common/WhatsAppShareButton';
 import { RecordPaymentModal } from '../../components/billing/RecordPaymentModal';
+import { InvoiceEditModal } from '../../components/sales/InvoiceEditModal';
 import { downloadSalesBillPdf } from '../../utils/pdfDownload';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../../hooks/useToast';
@@ -448,6 +449,14 @@ export const SalesDetailPage = ({ id, onNavigate, onOpenAudit }) => {
         requireReason={true}
         onConfirm={handleReverse}
         onCancel={() => setConfirmReverseOpen(false)}
+      />
+
+      {/* Edit Invoice Modal */}
+      <InvoiceEditModal
+        isOpen={isEditModalOpen}
+        bill={bill}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={fetchDetail}
       />
     </div>
   );

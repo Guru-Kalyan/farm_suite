@@ -500,27 +500,44 @@ def update_sales_bill(bill_id, data, user):
 
     items_data = data.get("items")
     if items_data is not None and len(items_data) > 0:
-        if bill.amount_paid > Decimal('0.00'):
+        # Pre-validate items and projected subtotal
+        projected_subtotal = Decimal('0.00')
+        for it in items_data:
+            try:
+                q = Decimal(str(it.get("quantity") or "0"))
+                r = Decimal(str(it.get("selling_rate") or "0"))
+                if q <= Decimal('0.000'):
+                    raise ValidationError("Quantity must be greater than zero for all items.")
+                if r < Decimal('0.00'):
+                    raise ValidationError("Selling rate cannot be negative.")
+                projected_subtotal += (q * r).quantize(Decimal('0.01'))
+            except (ValueError, TypeError, InvalidOperation):
+                raise ValidationError("Invalid quantity or selling rate in items.")
+
+        projected_grand = max(Decimal('0.00'), projected_subtotal - bill.discount)
+        if bill.amount_paid > Decimal('0.00') and projected_grand < bill.amount_paid:
             raise ValidationError(
-                f"Cannot modify item lines on bill {bill.bill_number}: Active customer payments amounting to ₹{bill.amount_paid} are recorded. Please delete or adjust payments first."
+                f"Cannot reduce invoice grand total to ₹{projected_grand}: Customer payments totaling ₹{bill.amount_paid} are already recorded. Please delete or adjust recorded payments first."
             )
 
         for line in bill.lines.select_related('inventory_lot').all():
             lot = line.inventory_lot
-            lot.available_quantity += line.quantity
-            if lot.status == 'DEPLETED':
-                lot.status = 'AVAILABLE'
-            lot.save()
+            if lot:
+                if not lot.lot_number.startswith("LOT-OPEN-"):
+                    lot.available_quantity += line.quantity
+                    if lot.status == 'DEPLETED':
+                        lot.status = 'AVAILABLE'
+                    lot.save()
 
-            StockMovement.objects.create(
-                inventory_lot=lot,
-                movement_type='REVERSAL',
-                quantity=line.quantity,
-                reference_type='SALES_BILL',
-                reference_id=bill.id,
-                created_by=user,
-                remarks=f"Stock lot restored during edit of Sales Bill {bill.bill_number}"
-            )
+                StockMovement.objects.create(
+                    inventory_lot=lot,
+                    movement_type='REVERSAL',
+                    quantity=line.quantity,
+                    reference_type='SALES_BILL',
+                    reference_id=bill.id,
+                    created_by=user,
+                    remarks=f"Stock lot restored during edit of Sales Bill {bill.bill_number}"
+                )
         bill.lines.all().delete()
 
         new_subtotal = Decimal('0.00')
