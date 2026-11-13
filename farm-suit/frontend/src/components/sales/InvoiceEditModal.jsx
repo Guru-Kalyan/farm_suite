@@ -12,6 +12,7 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
   const { addToast } = useToast();
 
   const [customers, setCustomers] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [billData, setBillData] = useState(null);
@@ -27,12 +28,18 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
   const [lines, setLines] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Load customer master
+  // Load customer master & items master
   useEffect(() => {
     if (isOpen) {
       mastersApi.getCustomers()
         .then(res => {
           if (res?.data?.customers) setCustomers(res.data.customers);
+        })
+        .catch(() => {});
+
+      mastersApi.getItems()
+        .then(res => {
+          if (res?.data?.items) setItems(res.data.items);
         })
         .catch(() => {});
     }
@@ -60,7 +67,7 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
             const r = l.selling_rate !== undefined ? parseFloat(l.selling_rate) : 0;
             return {
               id: l.id,
-              item_id: l.item?.id,
+              item_id: String(l.item?.id || ''),
               item_name: l.item?.name || 'Item',
               unit: l.item?.unit || '',
               quantity: String(q),
@@ -79,7 +86,32 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
     }
   }, [isOpen, bill]);
 
-  // Handle line item field changes
+  // Handle item product dropdown change
+  const handleItemChange = (idx, selectedItemId) => {
+    const selected = items.find(it => String(it.id) === String(selectedItemId));
+    setLines(prev => {
+      const updated = [...prev];
+      const current = updated[idx];
+      const newRate = (parseFloat(current.selling_rate) > 0 || !selected?.default_selling_price)
+        ? current.selling_rate
+        : String(selected.default_selling_price);
+
+      const q = parseFloat(current.quantity) || 0;
+      const r = parseFloat(newRate) || 0;
+
+      updated[idx] = {
+        ...current,
+        item_id: String(selectedItemId),
+        item_name: selected ? selected.name : current.item_name,
+        unit: selected ? (selected.unit?.short_name || selected.unit?.name || selected.unit || '') : current.unit,
+        selling_rate: newRate,
+        amount: (q * r).toFixed(2)
+      };
+      return updated;
+    });
+  };
+
+  // Handle line item quantity, rate, or amount changes
   const handleLineChange = (index, field, value) => {
     setLines(prev => {
       const updated = [...prev];
@@ -99,6 +131,33 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
       updated[index] = line;
       return updated;
     });
+  };
+
+  // Add a new line item
+  const handleAddLine = () => {
+    const defaultItem = items.length > 0 ? items[0] : null;
+    const defaultRate = defaultItem && defaultItem.default_selling_price ? String(defaultItem.default_selling_price) : '0';
+    setLines(prev => [
+      ...prev,
+      {
+        id: `new-${Date.now()}`,
+        item_id: defaultItem ? String(defaultItem.id) : '',
+        item_name: defaultItem ? defaultItem.name : 'Select item',
+        unit: defaultItem ? (defaultItem.unit?.short_name || defaultItem.unit?.name || defaultItem.unit || '') : '',
+        quantity: '1',
+        selling_rate: defaultRate,
+        amount: (1 * parseFloat(defaultRate || 0)).toFixed(2)
+      }
+    ]);
+  };
+
+  // Remove a line item
+  const handleRemoveLine = (index) => {
+    if (lines.length <= 1) {
+      addToast('Invoice must contain at least one product item', 'warning');
+      return;
+    }
+    setLines(prev => prev.filter((_, i) => i !== index));
   };
 
   // Live total calculations
@@ -126,8 +185,17 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
       return;
     }
 
+    if (!lines || lines.length === 0) {
+      setErrorMsg('At least one line item is required');
+      return;
+    }
+
     // Validate line items
     for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].item_id) {
+        setErrorMsg(`Line ${i + 1}: Please select an item / product`);
+        return;
+      }
       const q = parseFloat(lines[i].quantity);
       const r = parseFloat(lines[i].selling_rate);
       if (isNaN(q) || q <= 0) {
@@ -182,7 +250,7 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
       isOpen={isOpen}
       onClose={onClose}
       title={`Edit Invoice: ${billData?.bill_number || bill?.bill_number || ''}`}
-      maxWidth="750px"
+      maxWidth="800px"
       footer={
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
           <Button variant="ghost" onClick={onClose} disabled={saving}>
@@ -338,122 +406,182 @@ export const InvoiceEditModal = ({ isOpen, bill, onClose, onSuccess }) => {
           )}
 
           {/* Editable Lines Section */}
-          {lines && lines.length > 0 && (
-            <div>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '6px'
-              }}>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>
-                  INVOICE LINE ITEMS ({lines.length}) — EDIT QUANTITY & RATE
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Line total updates automatically
-                </div>
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '8px'
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>
+                INVOICE LINE ITEMS ({lines.length}) — EDIT PRODUCT, QUANTITY & RATE
               </div>
-              <div style={{
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                overflow: 'hidden'
-              }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Qty</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Rate (₹)</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l, idx) => (
-                      <tr key={l.id || idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
-                          <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{l.item_name}</div>
-                          {l.unit && (
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                              Unit: {l.unit}
-                            </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleAddLine}
+                title="Add product to this invoice"
+                style={{ fontSize: '12px', padding: '4px 10px', height: 'auto' }}
+              >
+                + Add Line Item
+              </Button>
+            </div>
+
+            <div style={{
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              overflowX: 'auto'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '600px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', minWidth: '220px' }}>Item / Product</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', width: '110px' }}>Qty</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', width: '110px' }}>Rate (₹)</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', width: '120px' }}>Amount (₹)</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'center', width: '40px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l, idx) => (
+                    <tr key={l.id || idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      {/* Product Selector Dropdown */}
+                      <td style={{ padding: '6px 10px', verticalAlign: 'middle' }}>
+                        <select
+                          value={String(l.item_id)}
+                          onChange={(e) => handleItemChange(idx, e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            backgroundColor: 'var(--bg-surface)',
+                            color: 'var(--text-primary)',
+                            fontSize: '12.5px',
+                            fontWeight: '600'
+                          }}
+                        >
+                          {!items.some(it => String(it.id) === String(l.item_id)) && (
+                            <option value={String(l.item_id)}>
+                              {l.item_name} {l.unit ? `(${l.unit})` : ''}
+                            </option>
                           )}
-                        </td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0.001"
-                            value={l.quantity}
-                            onChange={(e) => handleLineChange(idx, 'quantity', e.target.value)}
+                          {items.map(it => (
+                            <option key={it.id} value={String(it.id)}>
+                              {it.name} [{it.item_code}] ({it.unit?.short_name || it.unit?.name || it.unit || ''})
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* Quantity Input */}
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0.001"
+                          value={l.quantity}
+                          onChange={(e) => handleLineChange(idx, 'quantity', e.target.value)}
+                          placeholder="Qty"
+                          style={{
+                            width: '100%',
+                            textAlign: 'right',
+                            padding: '6px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            backgroundColor: 'var(--bg-surface)',
+                            color: 'var(--text-primary)',
+                            fontSize: '12.5px',
+                            fontWeight: '600'
+                          }}
+                        />
+                      </td>
+
+                      {/* Selling Rate Input */}
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={l.selling_rate}
+                          onChange={(e) => handleLineChange(idx, 'selling_rate', e.target.value)}
+                          placeholder="Rate"
+                          style={{
+                            width: '100%',
+                            textAlign: 'right',
+                            padding: '6px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            backgroundColor: 'var(--bg-surface)',
+                            color: 'var(--text-primary)',
+                            fontSize: '12.5px',
+                            fontWeight: '600'
+                          }}
+                        />
+                      </td>
+
+                      {/* Line Amount Input */}
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={l.amount}
+                          onChange={(e) => handleLineChange(idx, 'amount', e.target.value)}
+                          placeholder="Amount"
+                          style={{
+                            width: '100%',
+                            textAlign: 'right',
+                            padding: '6px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            backgroundColor: 'var(--bg-surface)',
+                            color: 'var(--text-primary)',
+                            fontSize: '12.5px',
+                            fontWeight: '700'
+                          }}
+                        />
+                      </td>
+
+                      {/* Delete Line Action */}
+                      <td style={{ padding: '6px 6px', textAlign: 'center', verticalAlign: 'middle' }}>
+                        {lines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLine(idx)}
+                            title="Remove line"
                             style={{
-                              width: '100%',
-                              textAlign: 'right',
-                              padding: '6px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              border: '1px solid var(--border-subtle)',
-                              backgroundColor: 'var(--bg-surface)',
-                              color: 'var(--text-primary)',
-                              fontSize: '12.5px',
-                              fontWeight: '600'
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--danger)',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              fontSize: '14px',
+                              lineHeight: 1
                             }}
-                          />
-                        </td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={l.selling_rate}
-                            onChange={(e) => handleLineChange(idx, 'selling_rate', e.target.value)}
-                            style={{
-                              width: '100%',
-                              textAlign: 'right',
-                              padding: '6px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              border: '1px solid var(--border-subtle)',
-                              backgroundColor: 'var(--bg-surface)',
-                              color: 'var(--text-primary)',
-                              fontSize: '12.5px',
-                              fontWeight: '600'
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={l.amount}
-                            onChange={(e) => handleLineChange(idx, 'amount', e.target.value)}
-                            style={{
-                              width: '100%',
-                              textAlign: 'right',
-                              padding: '6px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              border: '1px solid var(--border-subtle)',
-                              backgroundColor: 'var(--bg-surface)',
-                              color: 'var(--text-primary)',
-                              fontSize: '12.5px',
-                              fontWeight: '700'
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', fontWeight: '700' }}>
-                      <td style={{ padding: '8px 12px' }}>Total Subtotal</td>
-                      <td colSpan="2"></td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--primary)' }}>
-                        {formatCurrency(currentSubtotal)}
+                          >
+                            ✕
+                          </button>
+                        )}
                       </td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ backgroundColor: 'var(--bg-surface-secondary)', fontWeight: '700' }}>
+                    <td style={{ padding: '8px 12px' }}>Total Subtotal</td>
+                    <td colSpan="2"></td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--primary)' }}>
+                      {formatCurrency(currentSubtotal)}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
-          )}
+          </div>
         </form>
       )}
     </Modal>
